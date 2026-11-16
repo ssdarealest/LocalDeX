@@ -3,7 +3,7 @@
 This document tracks completed milestones, active work, and pending features for **LocalDeX**.
 
 > [!NOTE]
-> **Release v1.0.0 Tagged:** All core features, foldable awareness, input engines, and FOSS packaging are complete and validated for v1.0.0.
+> **Release v1.0.0 Published:** Successfully built and published to GitHub Releases (`v1.0.0`) with universal release APK (`LocalDeX-v1.0.0-universal.apk`). All core features, foldable awareness, input engines, and FOSS packaging are complete and validated.
 
 ---
 
