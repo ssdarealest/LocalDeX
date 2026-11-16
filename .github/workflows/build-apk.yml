@@ -38,13 +38,13 @@ jobs:
         run: gradle assembleDebug assembleRelease --stacktrace
 
       - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LocalDeX-debug-apk
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Upload Universal Release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LocalDeX-release-apk
           path: app/build/outputs/apk/release/*.apk
