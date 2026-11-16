@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
 
                 var isSetupOpen by remember { mutableStateOf(false) }
                 var isProfileEditorOpen by remember { mutableStateOf(false) }
+                var isFreeform by remember { mutableStateOf(AdbPermissionManager.isFreeformSupportEnabled(this@MainActivity)) }
+                var isDesktopMode by remember { mutableStateOf(AdbPermissionManager.isForceDesktopModeOnExternalDisplaysEnabled(this@MainActivity)) }
 
                 val setupSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
                 val profileSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -121,6 +123,26 @@ class MainActivity : ComponentActivity() {
                         hasSecureSettingsPermission = hasSecureSettings,
                         discoveredPairingPort = discoveryState.pairingEndpoint?.port,
                         discoveredConnectPort = discoveryState.connectEndpoint?.port,
+                        isFreeformEnabled = isFreeform,
+                        isDesktopModeEnabled = isDesktopMode,
+                        onToggleFreeform = { enabled ->
+                            coroutineScope.launch {
+                                AdbPermissionManager.setFreeformSupport(this@MainActivity, null, enabled)
+                                isFreeform = enabled
+                            }
+                        },
+                        onToggleDesktopMode = { enabled ->
+                            coroutineScope.launch {
+                                if (AdbPermissionManager.hasSecureSettingsPermission(this@MainActivity)) {
+                                    android.provider.Settings.Global.putInt(
+                                        contentResolver,
+                                        AdbPermissionManager.SETTING_FORCE_DESKTOP_MODE_ON_EXTERNAL,
+                                        if (enabled) 1 else 0
+                                    )
+                                }
+                                isDesktopMode = enabled
+                            }
+                        },
                         onRequestNotificationPermission = {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
