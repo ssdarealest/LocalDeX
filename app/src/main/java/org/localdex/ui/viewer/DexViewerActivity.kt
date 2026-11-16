@@ -44,6 +44,7 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var inputEngine: InputEngine? = null
 
     private val inputModeState = MutableStateFlow(InputMode.TRACKPAD)
+    private val isPointerCapturedState = MutableStateFlow(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,13 +81,22 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             )
             setContent {
                 val mode by inputModeState.collectAsState()
+                val isCaptured by isPointerCapturedState.collectAsState()
                 LocalDeXTheme {
                     SessionPillToolbar(
                         inputMode = mode,
+                        isPointerCaptured = isCaptured,
                         onToggleInputMode = {
                             val nextMode = if (mode == InputMode.TRACKPAD) InputMode.DIRECT_TOUCH else InputMode.TRACKPAD
                             inputModeState.value = nextMode
                             inputEngine?.inputMode = nextMode
+                        },
+                        onTogglePointerCapture = {
+                            if (surfaceView.hasPointerCapture()) {
+                                surfaceView.releasePointerCapture()
+                            } else {
+                                surfaceView.requestPointerCapture()
+                            }
                         },
                         onTriggerKeyboard = {
                             toggleSoftKeyboard()
@@ -102,14 +112,41 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
         setContentView(rootLayout)
 
-        // 3. System Back Navigation Forwarding: route Back key into DeX rather than closing activity
+        // 3. System Back Navigation Forwarding: route Back key into DeX or release pointer lock
         onBackPressedDispatcher.addCallback(this) {
-            inputEngine?.sendBackGesture()
+            if (surfaceView.hasPointerCapture()) {
+                surfaceView.releasePointerCapture()
+            } else {
+                inputEngine?.sendBackGesture()
+            }
         }
 
-        // 4. Touch Dispatch Interceptor
+        // 4. Touch & Generic Motion Dispatch Interceptor (Supports S-Pen stylus, mouse, and gestures)
         surfaceView.setOnTouchListener { _, event ->
-            inputEngine?.onTouchEvent(event, surfaceView.width, surfaceView.height) ?: false
+            inputEngine?.onTouchEvent(
+                event = event,
+                viewWidth = surfaceView.width,
+                viewHeight = surfaceView.height,
+                isPointerCaptured = surfaceView.hasPointerCapture()
+            ) ?: false
+        }
+
+        surfaceView.setOnGenericMotionListener { _, event ->
+            inputEngine?.onGenericMotionEvent(
+                event = event,
+                viewWidth = surfaceView.width,
+                viewHeight = surfaceView.height,
+                isPointerCaptured = surfaceView.hasPointerCapture()
+            ) ?: false
+        }
+
+        surfaceView.setOnCapturedPointerListener { _, event ->
+            inputEngine?.handleHardwareMouseEvent(
+                event = event,
+                viewWidth = surfaceView.width,
+                viewHeight = surfaceView.height,
+                isPointerCaptured = true
+            ) ?: false
         }
 
         // 5. Foldable Hinge & Posture Awareness: adjust layout for tabletop flex mode
@@ -201,6 +238,11 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         startService(stopIntent)
         finish()
+    }
+
+    override fun onPointerCaptureChanged(hasCapture: Boolean) {
+        super.onPointerCaptureChanged(hasCapture)
+        isPointerCapturedState.value = hasCapture
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

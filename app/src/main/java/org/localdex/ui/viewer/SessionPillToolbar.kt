@@ -57,7 +57,9 @@ import kotlin.math.roundToInt
 @Composable
 fun SessionPillToolbar(
     inputMode: InputMode,
+    isPointerCaptured: Boolean = false,
     onToggleInputMode: () -> Unit,
+    onTogglePointerCapture: (() -> Unit)? = null,
     onTriggerKeyboard: () -> Unit,
     onStopSession: () -> Unit,
     modifier: Modifier = Modifier
@@ -138,6 +140,20 @@ fun SessionPillToolbar(
                                 contentDescription = "Toggle Input Mode",
                                 tint = MaterialTheme.colorScheme.primary
                             )
+                        }
+
+                        // Toggle Pointer Capture / Mouse Lock
+                        if (onTogglePointerCapture != null) {
+                            IconButton(
+                                onClick = onTogglePointerCapture,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.PanTool,
+                                    contentDescription = if (isPointerCaptured) "Release Mouse Pointer" else "Lock Mouse Pointer",
+                                    tint = if (isPointerCaptured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         // Trigger Soft Keyboard
