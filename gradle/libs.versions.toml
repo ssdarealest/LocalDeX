@@ -16,7 +16,7 @@ junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
 truth = "1.4.4"
-mockk = "1.13.13"
+mockk = "1.14.12"
 
 [libraries]
 # AndroidX Core & Architecture
