@@ -64,6 +64,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1,LICENSE.txt,NOTICE.txt}"
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -94,6 +95,9 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Security & Cryptography
+    implementation(libs.bouncycastle.bcprov)
 
     // Testing
     testImplementation(libs.junit)

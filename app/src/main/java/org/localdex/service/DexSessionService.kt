@@ -2,7 +2,6 @@ package org.localdex.service
 
 import android.app.Notification
 import android.app.PendingIntent
-import android.app.RemoteInput
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -14,6 +13,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
