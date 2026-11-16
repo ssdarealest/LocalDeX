@@ -53,7 +53,7 @@ This document tracks completed milestones, active work, and pending features for
 ## 2. Pending Tasks & Roadmap
 
 ### High Priority (Immediate Next Steps)
-- [ ] **Codespaces Compilation & Test Validation**
+- [x] **Codespaces Compilation & Test Validation**
   - Run `./gradlew test --stacktrace` on Linux in GitHub Codespaces to verify all unit test suites.
   - Run `./gradlew assembleDebug` to produce the first debug universal APK.
   - Verify ProGuard rules and resource shrinking during `./gradlew assembleRelease`.
@@ -64,9 +64,10 @@ This document tracks completed milestones, active work, and pending features for
   - Measure hardware `MediaCodec` decode latency on Snapdragon and Exynos chipsets (`KEY_LOW_LATENCY = 1`).
 
 ### Medium Priority (Power-User & Experience Enhancements)
-- [ ] **Foldable Hinge & Posture Awareness**
+- [x] **Foldable Hinge & Posture Awareness**
   - Integrate Jetpack `androidx.window:window` `FoldingFeature`.
   - Automatically detect when a Galaxy Z Fold is opened or closed, switching between Cover profile and Inner profile seamlessly.
+  - Dynamic Tabletop flex mode layout adaptation in `DexViewerActivity`.
 
 - [ ] **Samsung DeX Audio Loopback Forwarding**
   - Explore audio stream capture via `scrcpy-server` audio forwarding options (`audio=true`, `audio_codec=raw/opus`) for complete sound pass-through.

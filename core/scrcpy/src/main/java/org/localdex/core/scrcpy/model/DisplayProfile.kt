@@ -47,6 +47,26 @@ data class DisplayProfile(
             bitRateMbps = 20
         )
 
+        val PRESET_FOLD_INNER = DisplayProfile(
+            id = "fold_inner",
+            name = "Galaxy Z Fold (Inner Unfolded)",
+            width = 2176,
+            height = 1812,
+            dpi = 360,
+            maxFps = 60,
+            bitRateMbps = 24
+        )
+
+        val PRESET_FOLD_COVER = DisplayProfile(
+            id = "fold_cover",
+            name = "Galaxy Z Fold (Cover Screen)",
+            width = 2316,
+            height = 904,
+            dpi = 380,
+            maxFps = 60,
+            bitRateMbps = 18
+        )
+
         val PRESET_1080P = DisplayProfile(
             id = "1080p",
             name = "1080p Standard (16:9)",
@@ -80,6 +100,8 @@ data class DisplayProfile(
         val DEFAULT_PRESETS = listOf(
             PRESET_1080P,
             PRESET_NATIVE,
+            PRESET_FOLD_INNER,
+            PRESET_FOLD_COVER,
             PRESET_4_3,
             PRESET_ULTRAWIDE
         )

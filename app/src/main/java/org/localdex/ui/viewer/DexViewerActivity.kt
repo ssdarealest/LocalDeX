@@ -31,6 +31,9 @@ import org.localdex.core.scrcpy.input.InputMode
 import org.localdex.core.scrcpy.server.ScrcpyServerManager
 import org.localdex.service.DexSessionService
 import org.localdex.service.SessionState
+import org.localdex.ui.foldable.DevicePosture
+import org.localdex.ui.foldable.FoldablePostureTracker
+import org.localdex.ui.foldable.FoldableState
 import org.localdex.ui.theme.LocalDeXTheme
 
 class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
@@ -108,6 +111,28 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         surfaceView.setOnTouchListener { _, event ->
             inputEngine?.onTouchEvent(event, surfaceView.width, surfaceView.height) ?: false
         }
+
+        // 5. Foldable Hinge & Posture Awareness: adjust layout for tabletop flex mode
+        val postureTracker = FoldablePostureTracker(this)
+        lifecycleScope.launch {
+            postureTracker.postureFlow.collect { foldableState ->
+                adjustLayoutForPosture(foldableState)
+            }
+        }
+    }
+
+    private fun adjustLayoutForPosture(state: FoldableState) {
+        val hinge = state.hingeBounds
+        val lp = surfaceView.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (state.posture == DevicePosture.TABLETOP && hinge != null && hinge.top > 0) {
+            lp.height = hinge.top
+            lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+            surfaceView.layoutParams = lp
+        } else {
+            lp.height = FrameLayout.LayoutParams.MATCH_PARENT
+            lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+            surfaceView.layoutParams = lp
+        }
     }
 
     private fun hideSystemBars() {
@@ -166,8 +191,8 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun toggleSoftKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.show(WindowInsetsCompat.Type.ime())
     }
 
     private fun stopSessionAndExit() {
