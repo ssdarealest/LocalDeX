@@ -32,9 +32,10 @@ This document tracks completed milestones, active work, and pending features for
   - Audio stream options (`audioEnabled`, `audioCodec`: Opus, AAC, RAW) integrated into server command spawner.
   - Low-latency `MediaCodec` H.264/H.265 video decoder rendering directly to a `Surface` (`VideoStreamDecoder.kt`).
   - Binary control socket writer (`ControlSocketWriter.kt`, `ControlMessage.kt`).
-  - Multi-mode desktop input engine: Virtual Trackpad mode, Direct Touch mode, and hardware peripheral pass-through (`InputEngine.kt`).
+  - Multi-mode desktop input engine: Virtual Trackpad mode, Direct Touch mode, S-Pen stylus precision routing with 4096-level pressure, and hardware mouse pass-through (`InputEngine.kt`).
+  - Relative mouse coordinate accumulation for Android Pointer Capture.
   - Display profile repository and logical dp viewport calculator (`DisplayProfile.kt`, `DisplayProfileRepository.kt`).
-  - Unit tests for control packets, display profile math, and server command formatting (`ControlMessageTest.kt`, `DisplayProfileTest.kt`, `ScrcpyServerManagerTest.kt`).
+  - Unit tests for control packets, display profile math, server commands, and input engine (`ControlMessageTest.kt`, `DisplayProfileTest.kt`, `ScrcpyServerManagerTest.kt`, `InputEngineTest.kt`).
 
 - [x] **Foldable Hinge & Posture Awareness (`:app`, `:core:scrcpy`)**
   - Jetpack `androidx.window:window` `WindowInfoTracker` integration (`FoldablePostureTracker.kt`).
@@ -54,12 +55,13 @@ This document tracks completed milestones, active work, and pending features for
   - Hero Status Card and one-tap launch FAB (`HomeScreen.kt`).
   - 4-step guided onboarding bottom sheet with One UI Desktop Enhancements toggles (`SetupWizardSheet.kt`).
   - Display profile editor with live aspect ratio wireframe preview and audio forwarding toggles (`ProfileEditorSheet.kt`).
-  - Fullscreen immersive viewer activity (`DexViewerActivity.kt`).
-  - Draggable translucent floating pill toolbar (`SessionPillToolbar.kt`).
-  - System Back gesture forwarding to Samsung DeX Display ID `N`.
+  - Fullscreen immersive viewer activity with pointer capture locking and S-Pen air hover support (`DexViewerActivity.kt`).
+  - Draggable translucent floating pill toolbar with mouse lock toggle (`SessionPillToolbar.kt`).
+  - System Back gesture forwarding to Samsung DeX Display ID `N` (with pointer release handling).
 
 - [x] **FOSS Packaging & Metadata**
   - Fastlane Triple-T metadata layout under `fastlane/metadata/android/en-US/` (`title.txt`, `short_description.txt`, `full_description.txt`, `changelogs/1.txt`).
+  - Official F-Droid metadata build recipe template (`metadata/org.localdex.yml`).
   - Zero proprietary GMS / Firebase dependencies (F-Droid and IzzyOnDroid compliant).
 
 - [x] **Compilation & Artifact Verification**
