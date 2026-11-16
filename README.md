@@ -56,10 +56,31 @@ flowchart TD
 
 ---
 
+## Supported Devices
+
+LocalDeX requires a Samsung Galaxy device equipped with official Samsung DeX firmware support and Android 11+ (Wireless Debugging).
+
+### Fully Supported Devices (Official Samsung DeX)
+
+| Device Family | Supported Models | Capabilities |
+| :--- | :--- | :--- |
+| **Galaxy S Series** | **Galaxy S25, S25+, S25 Ultra**<br>**Galaxy S24, S24+, S24 Ultra, S24 FE**<br>**Galaxy S23, S23+, S23 Ultra, S23 FE**<br>**Galaxy S22, S22+, S22 Ultra**<br>**Galaxy S21, S21+, S21 Ultra, S21 FE**<br>**Galaxy S20, S20+, S20 Ultra, S20 FE**<br>**Galaxy S10, S10+, S10e, S10 5G** | Full native DeX desktop mode, edge-resizable freeform windows, multi-mode trackpad & mouse input. |
+| **Galaxy Z Fold Series** | **Galaxy Z Fold 6, Z Fold Special Edition**<br>**Galaxy Z Fold 5, Z Fold 4, Z Fold 3, Z Fold 2** | Dynamic hinge posture awareness, Tabletop Flex Mode (upper screen display, lower trackpad), Cover & Inner screen profile switching. |
+| **Galaxy Note Series** | **Galaxy Note 20, Note 20 Ultra**<br>**Galaxy Note 10, Note 10+, Note 10 Lite**<br>**Galaxy Note 9, Note 8** | Full S-Pen stylus precision routing with 4096 pressure levels, side button secondary click, and air hover cursor tracking. |
+| **Galaxy Tab S Series** | **Galaxy Tab S10+, Tab S10 Ultra**<br>**Galaxy Tab S9, S9+, S9 Ultra, S9 FE, S9 FE+**<br>**Galaxy Tab S8, S8+, S8 Ultra**<br>**Galaxy Tab S7, S7+, S7 FE**<br>**Galaxy Tab S6, Tab Active 4 Pro, Tab Active 5** | Secondary virtual desktop alongside native tablet interface with full keyboard and mouse peripheral lock. |
+
+### Device Exceptions & Experimental Support
+
+- **Galaxy Z Flip Series (Z Flip 3 / 4 / 5 / 6):** Samsung does not include native DeX firmware binaries on the Z Flip series. However, LocalDeX can launch the stock **AOSP Freeform Desktop** when the **Force Desktop Mode** toggle (`force_desktop_mode_on_external_displays`) is enabled in LocalDeX setup.
+- **Galaxy A / M / F Series:** Most midrange Samsung devices do not contain Samsung DeX in their One UI firmware. They can experiment with AOSP Freeform Desktop mode via Developer flags, but will not boot Samsung's proprietary DeX desktop.
+- **Non-Samsung Devices (Pixel, Motorola, Xiaomi, OnePlus, etc.):** LocalDeX is architected around Samsung One UI's native DeX desktop launcher. On non-Samsung devices running Android 11+, LocalDeX will spawn stock Android secondary desktop mode instead of Samsung DeX.
+
+---
+
 ## Setup Guide
 
 1. **Install LocalDeX:**
-   Download and install the latest APK at the [Releases page]().
+  Download and install the latest APK build at the [Releases page](https://github.com/ssdarealest/LocalDeX/releases).
 2. **Enable Developer Options:**
    Open **Settings → About phone → Software information**, then tap **Build number** 7 times until Developer options is unlocked.
 3. **Follow the Onboarding Checklist:**
