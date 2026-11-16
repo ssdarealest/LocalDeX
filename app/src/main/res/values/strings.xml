@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">LocalDeX</string>
+    <string name="tile_label">LocalDeX</string>
+    <string name="tile_description">Toggle Samsung DeX on device display</string>
+
+    <string name="channel_session_name">DeX Session</string>
+    <string name="channel_session_desc">Foreground service notification for active LocalDeX session</string>
+    <string name="channel_pairing_name">ADB Wireless Pairing</string>
+    <string name="channel_pairing_desc">Notification for entering wireless debugging pairing code</string>
+
+    <string name="pairing_notification_title">Wireless Debugging Pairing</string>
+    <string name="pairing_notification_text">Enter the 6-digit pairing code from Developer Options</string>
+    <string name="pairing_action_reply">Enter Code</string>
+
+    <string name="session_notification_title">LocalDeX Active</string>
+    <string name="session_action_resume">Resume Viewer</string>
+    <string name="session_action_stop">Stop Session</string>
+</resources>
