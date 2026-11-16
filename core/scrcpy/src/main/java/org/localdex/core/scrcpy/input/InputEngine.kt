@@ -13,6 +13,8 @@ enum class InputMode {
 
 /**
  * Translates Android MotionEvents and KeyEvents into scrcpy control protocol packets.
+ * Supports Direct Touch, Virtual Trackpad, S-Pen / Stylus (with pressure & button),
+ * and Hardware Mouse (absolute & pointer-captured relative movement).
  */
 class InputEngine(
     private val writer: ControlSocketWriter,
@@ -20,9 +22,11 @@ class InputEngine(
     var displayHeight: Int,
     var inputMode: InputMode = InputMode.TRACKPAD
 ) {
-    // Current virtual cursor coordinates (for Trackpad mode)
-    private var cursorX = displayWidth / 2f
-    private var cursorY = displayHeight / 2f
+    // Current virtual cursor coordinates (for Trackpad & Relative Mouse mode)
+    var cursorX = displayWidth / 2f
+        private set
+    var cursorY = displayHeight / 2f
+        private set
 
     // Trackpad gesture tracking
     private var lastTouchX = 0f
@@ -45,15 +49,48 @@ class InputEngine(
     /**
      * Handles touch events from the Viewer SurfaceView.
      */
-    fun onTouchEvent(event: MotionEvent, viewWidth: Int, viewHeight: Int): Boolean {
-        // If hardware mouse is detected, route through hardware pass-through
-        if (event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
-            return handleHardwareMouseEvent(event, viewWidth, viewHeight)
+    fun onTouchEvent(
+        event: MotionEvent,
+        viewWidth: Int,
+        viewHeight: Int,
+        isPointerCaptured: Boolean = false
+    ): Boolean {
+        val toolType = event.getToolType(0)
+
+        // S-Pen / Stylus has dedicated direct precision routing with pressure
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            return handleStylusEvent(event, viewWidth, viewHeight)
+        }
+
+        // Hardware mouse routes through mouse handler (with pointer capture support)
+        if (toolType == MotionEvent.TOOL_TYPE_MOUSE) {
+            return handleHardwareMouseEvent(event, viewWidth, viewHeight, isPointerCaptured)
         }
 
         return when (inputMode) {
             InputMode.TRACKPAD -> handleTrackpadTouch(event)
             InputMode.DIRECT_TOUCH -> handleDirectTouch(event, viewWidth, viewHeight)
+        }
+    }
+
+    /**
+     * Handles generic motion events (mouse hover, mouse wheel scroll, stylus hover).
+     */
+    fun onGenericMotionEvent(
+        event: MotionEvent,
+        viewWidth: Int,
+        viewHeight: Int,
+        isPointerCaptured: Boolean = false
+    ): Boolean {
+        val toolType = event.getToolType(0)
+        return when (toolType) {
+            MotionEvent.TOOL_TYPE_STYLUS, MotionEvent.TOOL_TYPE_ERASER -> {
+                handleStylusEvent(event, viewWidth, viewHeight)
+            }
+            MotionEvent.TOOL_TYPE_MOUSE -> {
+                handleHardwareMouseEvent(event, viewWidth, viewHeight, isPointerCaptured)
+            }
+            else -> false
         }
     }
 
@@ -89,6 +126,47 @@ class InputEngine(
                 )
             )
         }
+        return true
+    }
+
+    private fun handleStylusEvent(event: MotionEvent, viewWidth: Int, viewHeight: Int): Boolean {
+        if (viewWidth <= 0 || viewHeight <= 0) return false
+
+        val scaleX = displayWidth.toFloat() / viewWidth.toFloat()
+        val scaleY = displayHeight.toFloat() / viewHeight.toFloat()
+        val x = (event.x * scaleX).roundToInt().coerceIn(0, displayWidth)
+        val y = (event.y * scaleY).roundToInt().coerceIn(0, displayHeight)
+        val pressure = event.getPressure(0)
+
+        val action = when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> ControlMessage.ACTION_DOWN
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_HOVER_MOVE -> ControlMessage.ACTION_MOVE
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> ControlMessage.ACTION_UP
+            else -> return false
+        }
+
+        val isEraser = event.getToolType(0) == MotionEvent.TOOL_TYPE_ERASER
+        val isButtonPressed = (event.buttonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
+                (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0
+
+        val buttons = when {
+            isEraser || isButtonPressed -> ControlMessage.BUTTON_SECONDARY
+            action != ControlMessage.ACTION_UP && event.actionMasked != MotionEvent.ACTION_HOVER_MOVE -> ControlMessage.BUTTON_PRIMARY
+            else -> 0
+        }
+
+        writer.send(
+            ControlMessage.Touch(
+                action = action,
+                pointerId = 0,
+                x = x,
+                y = y,
+                displayWidth = displayWidth,
+                displayHeight = displayHeight,
+                pressure = pressure,
+                buttons = buttons
+            )
+        )
         return true
     }
 
@@ -216,11 +294,31 @@ class InputEngine(
         return true
     }
 
-    private fun handleHardwareMouseEvent(event: MotionEvent, viewWidth: Int, viewHeight: Int): Boolean {
-        val scaleX = displayWidth.toFloat() / viewWidth.toFloat()
-        val scaleY = displayHeight.toFloat() / viewHeight.toFloat()
-        val x = (event.x * scaleX).roundToInt().coerceIn(0, displayWidth)
-        val y = (event.y * scaleY).roundToInt().coerceIn(0, displayHeight)
+    fun handleHardwareMouseEvent(
+        event: MotionEvent,
+        viewWidth: Int,
+        viewHeight: Int,
+        isPointerCaptured: Boolean = false
+    ): Boolean {
+        val x: Int
+        val y: Int
+
+        if (isPointerCaptured) {
+            val relX = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
+            val relY = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
+            cursorX = (cursorX + relX).coerceIn(0f, displayWidth.toFloat())
+            cursorY = (cursorY + relY).coerceIn(0f, displayHeight.toFloat())
+            x = cursorX.roundToInt()
+            y = cursorY.roundToInt()
+        } else {
+            if (viewWidth <= 0 || viewHeight <= 0) return false
+            val scaleX = displayWidth.toFloat() / viewWidth.toFloat()
+            val scaleY = displayHeight.toFloat() / viewHeight.toFloat()
+            x = (event.x * scaleX).roundToInt().coerceIn(0, displayWidth)
+            y = (event.y * scaleY).roundToInt().coerceIn(0, displayHeight)
+            cursorX = x.toFloat()
+            cursorY = y.toFloat()
+        }
 
         val action = when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> ControlMessage.ACTION_DOWN
