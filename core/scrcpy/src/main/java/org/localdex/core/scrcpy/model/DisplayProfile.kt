@@ -9,11 +9,19 @@ data class DisplayProfile(
     val maxFps: Int = 60,
     val bitRateMbps: Int = 16,
     val codec: VideoCodec = VideoCodec.H264,
+    val audioEnabled: Boolean = false,
+    val audioCodec: AudioCodec = AudioCodec.OPUS,
     val isCustom: Boolean = false
 ) {
     enum class VideoCodec(val scrcpyName: String, val mimeType: String) {
         H264("h264", "video/avc"),
         H265("h265", "video/hevc")
+    }
+
+    enum class AudioCodec(val scrcpyName: String, val mimeType: String) {
+        OPUS("opus", "audio/opus"),
+        AAC("aac", "audio/mp4a-latm"),
+        RAW("raw", "audio/raw")
     }
 
     /**
