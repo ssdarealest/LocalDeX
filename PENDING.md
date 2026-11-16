@@ -2,6 +2,9 @@
 
 This document tracks completed milestones, active work, and pending features for **LocalDeX**.
 
+> [!NOTE]
+> **Release v1.0.0 Tagged:** All core features, foldable awareness, input engines, and FOSS packaging are complete and validated for v1.0.0.
+
 ---
 
 ## 1. Current Progress Snapshot
