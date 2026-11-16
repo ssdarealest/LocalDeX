@@ -2,7 +2,7 @@
 
 Run Samsung DeX **entirely on your Galaxy device's own screen** — no dock, no cable, no computer, no root.
 
-**LocalDeX** is a Free and Open Source Software (FOSS) Android application written in **100% Kotlin**. It creates an on-device virtual display on your phone or tablet, enables Samsung One UI to launch the native DeX desktop environment directly on it, and decodes the desktop video stream fullscreen with zero-latency hardware acceleration and multi-mode mouse/touch interaction.
+**LocalDeX** is a Free and Open Source Software (FOSS) Android application written in **100% Kotlin**. It creates an on-device virtual display on your phone or tablet, enables Samsung One UI to launch the native DeX desktop environment directly on it, and decodes the desktop video stream fullscreen with zero-latency hardware acceleration and multi-mode mouse/touch interaction. Curious about the deep architecture? See the [technical breakdown](docs/TECHNICAL.md).
 
 ---
 
@@ -59,7 +59,7 @@ flowchart TD
 ## Setup Guide
 
 1. **Install LocalDeX:**
-   Download and install the APK (`LocalDeX-v1.0.0-universal.apk` or `LocalDeX-v1.0.0-debug-universal.apk`).
+   Download and install the latest APK at the [Releases page]().
 2. **Enable Developer Options:**
    Open **Settings → About phone → Software information**, then tap **Build number** 7 times until Developer options is unlocked.
 3. **Follow the Onboarding Checklist:**
