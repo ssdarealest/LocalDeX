@@ -1,5 +1,6 @@
 package org.localdex.core.scrcpy
 
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import com.google.common.truth.Truth.assertThat
@@ -32,7 +33,7 @@ class InputEngineTest {
 
     @Test
     fun directTouch_scalesCoordinatesAndSendsTouchDown() {
-        val event = mockk<MotionEvent>()
+        val event = mockk<MotionEvent>(relaxed = true)
         every { event.getToolType(0) } returns MotionEvent.TOOL_TYPE_FINGER
         every { event.pointerCount } returns 1
         every { event.getPointerId(0) } returns 0
@@ -56,7 +57,7 @@ class InputEngineTest {
 
     @Test
     fun stylusTouch_routesDirectlyWithPressureAndPrimaryButton() {
-        val event = mockk<MotionEvent>()
+        val event = mockk<MotionEvent>(relaxed = true)
         every { event.getToolType(0) } returns MotionEvent.TOOL_TYPE_STYLUS
         every { event.x } returns 960f
         every { event.y } returns 540f
@@ -78,7 +79,7 @@ class InputEngineTest {
 
     @Test
     fun stylusHover_sendsActionMoveWithZeroButtons() {
-        val event = mockk<MotionEvent>()
+        val event = mockk<MotionEvent>(relaxed = true)
         every { event.getToolType(0) } returns MotionEvent.TOOL_TYPE_STYLUS
         every { event.x } returns 500f
         every { event.y } returns 300f
@@ -99,7 +100,7 @@ class InputEngineTest {
 
     @Test
     fun stylusEraser_sendsSecondaryButton() {
-        val event = mockk<MotionEvent>()
+        val event = mockk<MotionEvent>(relaxed = true)
         every { event.getToolType(0) } returns MotionEvent.TOOL_TYPE_ERASER
         every { event.x } returns 600f
         every { event.y } returns 400f
@@ -121,7 +122,7 @@ class InputEngineTest {
         val initialX = inputEngine.cursorX
         val initialY = inputEngine.cursorY
 
-        val event = mockk<MotionEvent>()
+        val event = mockk<MotionEvent>(relaxed = true)
         every { event.getToolType(0) } returns MotionEvent.TOOL_TYPE_MOUSE
         every { event.actionMasked } returns MotionEvent.ACTION_MOVE
         every { event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) } returns 25f
@@ -150,7 +151,7 @@ class InputEngineTest {
 
     @Test
     fun hardwareMouse_scrollEvent_sendsScrollMessage() {
-        val event = mockk<MotionEvent>()
+        val event = mockk<MotionEvent>(relaxed = true)
         every { event.getToolType(0) } returns MotionEvent.TOOL_TYPE_MOUSE
         every { event.actionMasked } returns MotionEvent.ACTION_SCROLL
         every { event.x } returns 960f
@@ -177,7 +178,7 @@ class InputEngineTest {
 
     @Test
     fun keyEvent_sendsKeycodeMessage() {
-        val event = mockk<KeyEvent>()
+        val event = mockk<KeyEvent>(relaxed = true)
         every { event.action } returns KeyEvent.ACTION_DOWN
         every { event.keyCode } returns KeyEvent.KEYCODE_ENTER
         every { event.repeatCount } returns 0
@@ -205,5 +206,90 @@ class InputEngineTest {
         verify(exactly = 1) {
             mockWriter.send(ControlMessage.BackOrScreenOn(ControlMessage.ACTION_UP))
         }
+    }
+
+    @Test
+    fun joystickLeftStick_movesCursorAndSendsTouchMove() {
+        val initialX = inputEngine.cursorX
+        val initialY = inputEngine.cursorY
+
+        val event = mockk<MotionEvent>(relaxed = true)
+        every { event.source } returns InputDevice.SOURCE_JOYSTICK
+        every { event.getAxisValue(MotionEvent.AXIS_X) } returns 0.5f
+        every { event.getAxisValue(MotionEvent.AXIS_Y) } returns -0.5f
+        every { event.getAxisValue(MotionEvent.AXIS_Z) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_RZ) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_HAT_X) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_HAT_Y) } returns 0f
+
+        val handled = inputEngine.onGenericMotionEvent(event, viewWidth = 1920, viewHeight = 1080)
+        assertThat(handled).isTrue()
+
+        assertThat(inputEngine.cursorX).isGreaterThan(initialX)
+        assertThat(inputEngine.cursorY).isLessThan(initialY)
+
+        val slot = slot<ControlMessage.Touch>()
+        verify { mockWriter.send(capture(slot)) }
+        assertThat(slot.captured.action).isEqualTo(ControlMessage.ACTION_MOVE)
+    }
+
+    @Test
+    fun joystickRightStick_sendsScrollMessage() {
+        val event = mockk<MotionEvent>(relaxed = true)
+        every { event.source } returns InputDevice.SOURCE_JOYSTICK
+        every { event.getAxisValue(MotionEvent.AXIS_X) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_Y) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_Z) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_RZ) } returns 0.8f
+        every { event.getAxisValue(MotionEvent.AXIS_HAT_X) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_HAT_Y) } returns 0f
+
+        val handled = inputEngine.onGenericMotionEvent(event, viewWidth = 1920, viewHeight = 1080)
+        assertThat(handled).isTrue()
+
+        val slot = slot<ControlMessage.Scroll>()
+        verify { mockWriter.send(capture(slot)) }
+        assertThat(slot.captured.vScroll).isEqualTo(-0.8f)
+    }
+
+    @Test
+    fun joystickDpadHat_sendsDpadKeycode() {
+        val event = mockk<MotionEvent>(relaxed = true)
+        every { event.source } returns InputDevice.SOURCE_JOYSTICK
+        every { event.getAxisValue(MotionEvent.AXIS_X) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_Y) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_Z) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_RZ) } returns 0f
+        every { event.getAxisValue(MotionEvent.AXIS_HAT_X) } returns 1.0f
+        every { event.getAxisValue(MotionEvent.AXIS_HAT_Y) } returns 0f
+
+        val handled = inputEngine.onGenericMotionEvent(event, viewWidth = 1920, viewHeight = 1080)
+        assertThat(handled).isTrue()
+
+        verify {
+            mockWriter.send(ControlMessage.Keycode(ControlMessage.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT))
+            mockWriter.send(ControlMessage.Keycode(ControlMessage.ACTION_UP, KeyEvent.KEYCODE_DPAD_RIGHT))
+        }
+    }
+
+    @Test
+    fun gamepadButtonA_inTrackpadMode_sendsTouchClickAtCursor() {
+        inputEngine.inputMode = InputMode.TRACKPAD
+
+        val event = mockk<KeyEvent>(relaxed = true)
+        every { event.action } returns KeyEvent.ACTION_DOWN
+        every { event.keyCode } returns KeyEvent.KEYCODE_BUTTON_A
+
+        val handled = inputEngine.onKeyEvent(event)
+        assertThat(handled).isTrue()
+
+        val slot = slot<ControlMessage.Touch>()
+        verify { mockWriter.send(capture(slot)) }
+
+        val touch = slot.captured
+        assertThat(touch.action).isEqualTo(ControlMessage.ACTION_DOWN)
+        assertThat(touch.buttons).isEqualTo(ControlMessage.BUTTON_PRIMARY)
+        assertThat(touch.x).isEqualTo(inputEngine.cursorX.toInt())
+        assertThat(touch.y).isEqualTo(inputEngine.cursorY.toInt())
     }
 }

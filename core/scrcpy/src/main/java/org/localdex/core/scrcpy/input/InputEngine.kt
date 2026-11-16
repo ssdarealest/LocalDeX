@@ -1,9 +1,11 @@
 package org.localdex.core.scrcpy.input
 
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import org.localdex.core.scrcpy.control.ControlMessage
 import org.localdex.core.scrcpy.control.ControlSocketWriter
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 enum class InputMode {
@@ -37,6 +39,8 @@ class InputEngine(
     companion object {
         private const val TAP_THRESHOLD_MS = 200L
         private const val TRACKPAD_SENSITIVITY = 1.35f
+        private const val JOYSTICK_DEADZONE = 0.15f
+        private const val JOYSTICK_CURSOR_SPEED = 24.0f
     }
 
     fun updateDisplayDimensions(width: Int, height: Int) {
@@ -74,7 +78,7 @@ class InputEngine(
     }
 
     /**
-     * Handles generic motion events (mouse hover, mouse wheel scroll, stylus hover).
+     * Handles generic motion events (mouse hover, mouse wheel scroll, stylus hover, gamepad joystick).
      */
     fun onGenericMotionEvent(
         event: MotionEvent,
@@ -82,6 +86,13 @@ class InputEngine(
         viewHeight: Int,
         isPointerCaptured: Boolean = false
     ): Boolean {
+        // Gamepad / Joystick analog stick & D-pad hat mapping
+        if ((event.source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+            (event.source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+        ) {
+            return handleJoystickEvent(event)
+        }
+
         val toolType = event.getToolType(0)
         return when (toolType) {
             MotionEvent.TOOL_TYPE_STYLUS, MotionEvent.TOOL_TYPE_ERASER -> {
@@ -92,6 +103,75 @@ class InputEngine(
             }
             else -> false
         }
+    }
+
+    /**
+     * Handles analog joystick stick navigation, right stick scrolling, and D-pad hat events.
+     */
+    fun handleJoystickEvent(event: MotionEvent): Boolean {
+        var handled = false
+
+        // Left Analog Stick (Axes X & Y): Moves virtual cursor in desktop space
+        val stickX = event.getAxisValue(MotionEvent.AXIS_X)
+        val stickY = event.getAxisValue(MotionEvent.AXIS_Y)
+        if (abs(stickX) > JOYSTICK_DEADZONE || abs(stickY) > JOYSTICK_DEADZONE) {
+            val dx = stickX * JOYSTICK_CURSOR_SPEED
+            val dy = stickY * JOYSTICK_CURSOR_SPEED
+            cursorX = (cursorX + dx).coerceIn(0f, displayWidth.toFloat())
+            cursorY = (cursorY + dy).coerceIn(0f, displayHeight.toFloat())
+
+            writer.send(
+                ControlMessage.Touch(
+                    action = ControlMessage.ACTION_MOVE,
+                    pointerId = 0,
+                    x = cursorX.roundToInt(),
+                    y = cursorY.roundToInt(),
+                    displayWidth = displayWidth,
+                    displayHeight = displayHeight,
+                    buttons = 0
+                )
+            )
+            handled = true
+        }
+
+        // Right Analog Stick (Axes Z & RZ): Smooth scrolling in DeX
+        val rStickX = event.getAxisValue(MotionEvent.AXIS_Z)
+        val rStickY = event.getAxisValue(MotionEvent.AXIS_RZ)
+        if (abs(rStickX) > JOYSTICK_DEADZONE || abs(rStickY) > JOYSTICK_DEADZONE) {
+            val hScroll = if (abs(rStickX) > JOYSTICK_DEADZONE) rStickX else 0f
+            val vScroll = if (abs(rStickY) > JOYSTICK_DEADZONE) -rStickY else 0f
+            writer.send(
+                ControlMessage.Scroll(
+                    x = cursorX.roundToInt(),
+                    y = cursorY.roundToInt(),
+                    displayWidth = displayWidth,
+                    displayHeight = displayHeight,
+                    hScroll = hScroll,
+                    vScroll = vScroll
+                )
+            )
+            handled = true
+        }
+
+        // D-pad Hat Switch (Axes HAT_X & HAT_Y): Injects arrow key events
+        val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
+        val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+        if (hatX != 0f || hatY != 0f) {
+            val keycode = when {
+                hatX < -0.5f -> KeyEvent.KEYCODE_DPAD_LEFT
+                hatX > 0.5f -> KeyEvent.KEYCODE_DPAD_RIGHT
+                hatY < -0.5f -> KeyEvent.KEYCODE_DPAD_UP
+                hatY > 0.5f -> KeyEvent.KEYCODE_DPAD_DOWN
+                else -> 0
+            }
+            if (keycode != 0) {
+                writer.send(ControlMessage.Keycode(ControlMessage.ACTION_DOWN, keycode))
+                writer.send(ControlMessage.Keycode(ControlMessage.ACTION_UP, keycode))
+                handled = true
+            }
+        }
+
+        return handled
     }
 
     private fun handleDirectTouch(event: MotionEvent, viewWidth: Int, viewHeight: Int): Boolean {
@@ -364,9 +444,27 @@ class InputEngine(
     }
 
     /**
-     * Forwards physical keyboard events.
+     * Forwards physical keyboard and gamepad button events.
      */
     fun onKeyEvent(event: KeyEvent): Boolean {
+        // In Trackpad mode, Gamepad Button A acts as Primary Click at cursor position
+        if (inputMode == InputMode.TRACKPAD && event.keyCode == KeyEvent.KEYCODE_BUTTON_A) {
+            val action = if (event.action == KeyEvent.ACTION_DOWN) ControlMessage.ACTION_DOWN else ControlMessage.ACTION_UP
+            val buttons = if (event.action == KeyEvent.ACTION_DOWN) ControlMessage.BUTTON_PRIMARY else 0
+            writer.send(
+                ControlMessage.Touch(
+                    action = action,
+                    pointerId = 0,
+                    x = cursorX.roundToInt(),
+                    y = cursorY.roundToInt(),
+                    displayWidth = displayWidth,
+                    displayHeight = displayHeight,
+                    buttons = buttons
+                )
+            )
+            return true
+        }
+
         val action = when (event.action) {
             KeyEvent.ACTION_DOWN -> ControlMessage.ACTION_DOWN
             KeyEvent.ACTION_UP -> ControlMessage.ACTION_UP
