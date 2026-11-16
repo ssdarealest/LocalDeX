@@ -40,7 +40,7 @@ android {
 
     applicationVariants.all {
         outputs.all {
-            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val output = this as? com.android.build.gradle.api.ApkVariantOutput
             output?.outputFileName = "LocalDeX-v${versionName}-universal.apk"
         }
     }
@@ -88,7 +88,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material-icons-extended)
+    implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Coroutines
