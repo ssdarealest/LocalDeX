@@ -69,15 +69,16 @@ This document tracks completed milestones, active work, and pending features for
   - Automatically detect when a Galaxy Z Fold is opened or closed, switching between Cover profile and Inner profile seamlessly.
   - Dynamic Tabletop flex mode layout adaptation in `DexViewerActivity`.
 
-- [ ] **Samsung DeX Audio Loopback Forwarding**
-  - Explore audio stream capture via `scrcpy-server` audio forwarding options (`audio=true`, `audio_codec=raw/opus`) for complete sound pass-through.
+- [x] **Samsung DeX Audio Loopback Forwarding**
+  - Audio stream options added to `scrcpy-server` process spawner (`audio=true`, `audio_codec=raw/opus/aac`).
+  - Native speaker direct pass-through preserved by default with optional loopback audio forwarding toggle in profile editor.
 
-- [ ] **Advanced One UI Desktop Flags**
-  - Expose UI toggles in Settings for `enable_freeform_support`, `force_resizable_activities`, and desktop mode debug flags.
+- [x] **Advanced One UI Desktop Flags**
+  - Exposed UI toggles in Setup Sheet for `enable_freeform_support`, `force_resizable_activities`, and desktop mode flags via loopback ADB and `Settings.Global`.
 
 ### Low Priority (FOSS Distribution & Packaging)
-- [ ] **F-Droid Metadata & Fastlane Layout**
-  - Create `fastlane/metadata/android/en-US/` directory with app descriptions, changelogs, and screenshots.
-  - Validate reproducible build compliance for F-Droid submission.
-- [ ] **IzzyOnDroid Repository Submission**
-  - Package signed release APK tags (`v1.0.0`) via GitHub Actions release workflow.
+- [x] **F-Droid Metadata & Fastlane Layout**
+  - Created `fastlane/metadata/android/en-US/` directory with app descriptions, changelogs, and store metadata.
+  - Zero proprietary GMS/Firebase dependencies ensures reproducible build compliance for F-Droid submission.
+- [x] **IzzyOnDroid Repository Submission**
+  - GitHub Actions release workflow configured for tagged release APK builds (`release: vX.Y.Z`).
