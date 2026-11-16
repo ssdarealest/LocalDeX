@@ -34,6 +34,7 @@ This document tracks completed milestones, active work, and pending features for
   - Binary control socket writer (`ControlSocketWriter.kt`, `ControlMessage.kt`).
   - Multi-mode desktop input engine: Virtual Trackpad mode, Direct Touch mode, S-Pen stylus precision routing with 4096-level pressure, and hardware mouse pass-through (`InputEngine.kt`).
   - Relative mouse coordinate accumulation for Android Pointer Capture.
+  - Gamepad & joystick controller mapping: analog cursor navigation, right-stick scrolling, D-pad hat mapping, and button A click injection.
   - Display profile repository and logical dp viewport calculator (`DisplayProfile.kt`, `DisplayProfileRepository.kt`).
   - Unit tests for control packets, display profile math, server commands, and input engine (`ControlMessageTest.kt`, `DisplayProfileTest.kt`, `ScrcpyServerManagerTest.kt`, `InputEngineTest.kt`).
 
@@ -55,8 +56,8 @@ This document tracks completed milestones, active work, and pending features for
   - Hero Status Card and one-tap launch FAB (`HomeScreen.kt`).
   - 4-step guided onboarding bottom sheet with One UI Desktop Enhancements toggles (`SetupWizardSheet.kt`).
   - Display profile editor with live aspect ratio wireframe preview and audio forwarding toggles (`ProfileEditorSheet.kt`).
-  - Fullscreen immersive viewer activity with pointer capture locking and S-Pen air hover support (`DexViewerActivity.kt`).
-  - Draggable translucent floating pill toolbar with mouse lock toggle (`SessionPillToolbar.kt`).
+  - Fullscreen immersive viewer activity with pointer capture locking, S-Pen air hover support, and IME soft keyboard tracking (`DexViewerActivity.kt`).
+  - Draggable translucent floating pill toolbar with mouse lock toggle and two-way soft keyboard show/hide toggle (`SessionPillToolbar.kt`).
   - System Back gesture forwarding to Samsung DeX Display ID `N` (with pointer release handling).
 
 - [x] **FOSS Packaging & Metadata**
@@ -93,7 +94,7 @@ This document tracks completed milestones, active work, and pending features for
   - Direct precision touch routing, 4096-level pressure forwarding, S-Pen button secondary action, and hover motion tracking.
 - [x] **Pointer Capture & Mouse Lock**
   - Android pointer capture API (`requestPointerCapture`) integration in `DexViewerActivity` and toggle button in `SessionPillToolbar`.
-- [ ] **Custom Desktop IME / Soft Keyboard Management**
-  - Provide an option to suppress or relocate the on-screen keyboard so it does not occlude the DeX taskbar or bottom desktop region.
-- [ ] **Hardware Gamepad & Controller Mapping**
-  - Map external Bluetooth controllers (Xbox, DualSense) to DeX display events.
+- [x] **Custom Desktop IME / Soft Keyboard Management**
+  - Two-way soft keyboard show/hide toggle in `SessionPillToolbar` and WindowInsets IME height tracking to prevent UI occlusion.
+- [x] **Hardware Gamepad & Controller Mapping**
+  - Analog joystick cursor gliding (`AXIS_X`, `AXIS_Y`), right-stick smooth scrolling (`AXIS_Z`, `AXIS_RZ`), D-pad hat mapping (`AXIS_HAT_X`, `AXIS_HAT_Y`), and button A click injection.
