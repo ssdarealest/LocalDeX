@@ -25,6 +25,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,6 +54,8 @@ fun ProfileEditorSheet(
     var maxFps by remember { mutableIntStateOf(initialProfile.maxFps) }
     var bitRateMbps by remember { mutableIntStateOf(initialProfile.bitRateMbps) }
     var codec by remember { mutableStateOf(initialProfile.codec) }
+    var audioEnabled by remember { mutableStateOf(initialProfile.audioEnabled) }
+    var audioCodec by remember { mutableStateOf(initialProfile.audioCodec) }
 
     val logicalWidthDp = (width * 160f / dpi).toInt()
     val logicalHeightDp = (height * 160f / dpi).toInt()
@@ -207,6 +210,41 @@ fun ProfileEditorSheet(
                 )
             }
 
+            // Audio Stream Options
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Audio Forwarding:", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Device speakers play DeX audio natively. Enable if you want scrcpy loopback audio stream.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Switch(
+                        checked = audioEnabled,
+                        onCheckedChange = { audioEnabled = it }
+                    )
+                }
+                if (audioEnabled) {
+                    Text("Audio Codec:", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DisplayProfile.AudioCodec.entries.forEach { ac ->
+                            FilterChip(
+                                selected = audioCodec == ac,
+                                onClick = { audioCodec = ac },
+                                label = { Text(ac.scrcpyName.uppercase()) }
+                            )
+                        }
+                    }
+                }
+            }
+
             // Save Action
             Button(
                 onClick = {
@@ -219,6 +257,8 @@ fun ProfileEditorSheet(
                         maxFps = maxFps,
                         bitRateMbps = bitRateMbps,
                         codec = codec,
+                        audioEnabled = audioEnabled,
+                        audioCodec = audioCodec,
                         isCustom = true
                     )
                     onSaveProfile(updated)
