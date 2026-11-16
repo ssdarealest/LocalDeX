@@ -79,17 +79,18 @@ This document tracks completed milestones, active work, and pending features for
   - Benchmark hardware `MediaCodec` decode latency (`KEY_LOW_LATENCY = 1`) on Snapdragon vs Exynos chipsets.
 
 ### Phase 2: FOSS Distribution & Upstream Indexing
-- [ ] **F-Droid Inclusion Submission**
-  - Prepare `org.localdex.yml` build recipe for F-Droid official repository.
-  - Verify reproducible build compliance using F-Droid Docker container.
+- [x] **F-Droid Build Recipe Template**
+  - Prepared `metadata/org.localdex.yml` build recipe for F-Droid official repository inclusion.
+- [ ] **F-Droid Official Merge Request**
+  - Verify reproducible build compliance using F-Droid Docker container and submit merge request to `fdroiddata`.
 - [ ] **IzzyOnDroid Submission**
   - Submit repository to IzzyOnDroid directory for automated tag tracking (`release: v*`).
 
 ### Phase 3: Ergonomic & Power-User Enhancements
-- [ ] **S-Pen & Stylus Pass-Through**
-  - Forward pressure sensitivity and hover events to scrcpy control socket for stylus-heavy desktop workflows.
-- [ ] **Pointer Capture & Mouse Lock**
-  - Integrate Android pointer capture API (`requestPointerCapture`) in `DexViewerActivity` when a physical Bluetooth/USB mouse is connected.
+- [x] **S-Pen & Stylus Pass-Through**
+  - Direct precision touch routing, 4096-level pressure forwarding, S-Pen button secondary action, and hover motion tracking.
+- [x] **Pointer Capture & Mouse Lock**
+  - Android pointer capture API (`requestPointerCapture`) integration in `DexViewerActivity` and toggle button in `SessionPillToolbar`.
 - [ ] **Custom Desktop IME / Soft Keyboard Management**
   - Provide an option to suppress or relocate the on-screen keyboard so it does not occlude the DeX taskbar or bottom desktop region.
 - [ ] **Hardware Gamepad & Controller Mapping**
