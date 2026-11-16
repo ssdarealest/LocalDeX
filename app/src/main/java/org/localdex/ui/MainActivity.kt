@@ -23,6 +23,8 @@ import org.localdex.core.adb.permission.AdbPermissionManager
 import org.localdex.core.scrcpy.model.DisplayProfile
 import org.localdex.data.DisplayProfileRepository
 import org.localdex.service.DexSessionService
+import org.localdex.ui.foldable.FoldablePostureTracker
+import org.localdex.ui.foldable.FoldableState
 import org.localdex.ui.home.HomeScreen
 import org.localdex.ui.profile.ProfileEditorSheet
 import org.localdex.ui.setup.SetupWizardSheet
@@ -52,6 +54,9 @@ class MainActivity : ComponentActivity() {
                 val discoveryState by discoveryManager.discoveryState.collectAsState()
                 val activeProfile by profileRepository.selectedProfileFlow.collectAsState(initial = DisplayProfile.PRESET_1080P)
 
+                val postureTracker = remember { FoldablePostureTracker(this@MainActivity) }
+                val foldableState by postureTracker.postureFlow.collectAsState(initial = FoldableState())
+
                 var isSetupOpen by remember { mutableStateOf(false) }
                 var isProfileEditorOpen by remember { mutableStateOf(false) }
 
@@ -76,6 +81,7 @@ class MainActivity : ComponentActivity() {
                     hasSecureSettings = hasSecureSettings,
                     activeProfile = activeProfile,
                     allProfiles = DisplayProfile.DEFAULT_PRESETS,
+                    foldableState = foldableState,
                     onSelectProfile = { profile ->
                         coroutineScope.launch {
                             profileRepository.selectProfile(profile.id)
