@@ -17,6 +17,7 @@ import androidx.activity.addCallback
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -45,6 +46,7 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     private val inputModeState = MutableStateFlow(InputMode.TRACKPAD)
     private val isPointerCapturedState = MutableStateFlow(false)
+    private val imeHeightState = MutableStateFlow(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,10 +84,12 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             setContent {
                 val mode by inputModeState.collectAsState()
                 val isCaptured by isPointerCapturedState.collectAsState()
+                val imeHeight by imeHeightState.collectAsState()
                 LocalDeXTheme {
                     SessionPillToolbar(
                         inputMode = mode,
                         isPointerCaptured = isCaptured,
+                        imeBottomInset = imeHeight,
                         onToggleInputMode = {
                             val nextMode = if (mode == InputMode.TRACKPAD) InputMode.DIRECT_TOUCH else InputMode.TRACKPAD
                             inputModeState.value = nextMode
@@ -109,6 +113,13 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             }
         }
         rootLayout.addView(composeOverlay)
+
+        // Apply window insets listener to track soft keyboard height
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
+            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            imeHeightState.value = imeBottom
+            insets
+        }
 
         setContentView(rootLayout)
 
@@ -229,7 +240,13 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     private fun toggleSoftKeyboard() {
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.show(WindowInsetsCompat.Type.ime())
+        val isImeVisible = ViewCompat.getRootWindowInsets(window.decorView)
+            ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        if (isImeVisible) {
+            windowInsetsController.hide(WindowInsetsCompat.Type.ime())
+        } else {
+            windowInsetsController.show(WindowInsetsCompat.Type.ime())
+        }
     }
 
     private fun stopSessionAndExit() {

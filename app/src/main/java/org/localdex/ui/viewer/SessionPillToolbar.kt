@@ -58,6 +58,7 @@ import kotlin.math.roundToInt
 fun SessionPillToolbar(
     inputMode: InputMode,
     isPointerCaptured: Boolean = false,
+    imeBottomInset: Int = 0,
     onToggleInputMode: () -> Unit,
     onTogglePointerCapture: (() -> Unit)? = null,
     onTriggerKeyboard: () -> Unit,
@@ -69,10 +70,10 @@ fun SessionPillToolbar(
     var isExpanded by remember { mutableStateOf(false) }
     var isTouching by remember { mutableStateOf(false) }
 
-    // Auto-dim pill to 0.35 alpha after 3 seconds of inactivity
+    // Auto-dim pill to 0.35 alpha after 3 seconds of inactivity (stays bright if keyboard is visible)
     var alphaVal by remember { mutableFloatStateOf(0.95f) }
-    LaunchedEffect(isTouching, isExpanded) {
-        if (!isTouching && !isExpanded) {
+    LaunchedEffect(isTouching, isExpanded, imeBottomInset) {
+        if (!isTouching && !isExpanded && imeBottomInset == 0) {
             delay(3000)
             alphaVal = 0.35f
         } else {
