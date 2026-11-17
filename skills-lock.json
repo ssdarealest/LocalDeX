@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "gradle-run": {
+      "source": "chrisbanes/skills",
+      "commit": "6cfb02af68fae7df5e27dcfc23056c0d3941dec7",
+      "sourceType": "github",
+      "skillPath": "skills/gradle-run/SKILL.md",
+      "computedHash": "043462cfa81c560b7cb2d61b6957fad43efc9216585c7256f415ef742d9eae92"
+    }
+  }
+}
