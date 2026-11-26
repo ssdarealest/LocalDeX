@@ -65,4 +65,29 @@ class ControlMessageTest {
         buffer.get(payload)
         assertThat(String(payload)).isEqualTo(text)
     }
+
+    @Test
+    fun scrollMessage_serializationUses21ByteFixedPoint16Format() {
+        val msg = ControlMessage.Scroll(
+            x = 640,
+            y = 360,
+            displayWidth = 1920,
+            displayHeight = 1080,
+            hScroll = 1.0f,
+            vScroll = -1.0f,
+            buttons = ControlMessage.BUTTON_PRIMARY
+        )
+        val bytes = msg.toByteArray()
+        assertThat(bytes.size).isEqualTo(21)
+
+        val buffer = ByteBuffer.wrap(bytes)
+        assertThat(buffer.get()).isEqualTo(ControlMessage.TYPE_INJECT_SCROLL_EVENT.toByte())
+        assertThat(buffer.int).isEqualTo(640)
+        assertThat(buffer.int).isEqualTo(360)
+        assertThat(buffer.short).isEqualTo(1920.toShort())
+        assertThat(buffer.short).isEqualTo(1080.toShort())
+        assertThat(buffer.short).isEqualTo(Short.MAX_VALUE)
+        assertThat(buffer.short).isEqualTo(Short.MIN_VALUE)
+        assertThat(buffer.int).isEqualTo(ControlMessage.BUTTON_PRIMARY)
+    }
 }
