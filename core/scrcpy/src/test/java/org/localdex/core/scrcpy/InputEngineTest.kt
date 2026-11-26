@@ -292,4 +292,138 @@ class InputEngineTest {
         assertThat(touch.x).isEqualTo(inputEngine.cursorX.toInt())
         assertThat(touch.y).isEqualTo(inputEngine.cursorY.toInt())
     }
+
+    @Test
+    fun trackpadDoubleTapAndHold_triggersDragWithPrimaryButton() {
+        var now = 1000L
+        val trackpadEngine = InputEngine(
+            writer = mockWriter,
+            displayWidth = 1920,
+            displayHeight = 1080,
+            inputMode = InputMode.TRACKPAD,
+            timeProvider = { now }
+        )
+
+        fun fingerEvent(action: Int, x: Float, y: Float): MotionEvent = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_FINGER
+            every { it.pointerCount } returns 1
+            every { it.actionMasked } returns action
+            every { it.x } returns x
+            every { it.y } returns y
+        }
+
+        // Quick tap (DOWN -> UP)
+        trackpadEngine.onTouchEvent(fingerEvent(MotionEvent.ACTION_DOWN, 100f, 100f), 1920, 1080)
+        now += 50L
+        trackpadEngine.onTouchEvent(fingerEvent(MotionEvent.ACTION_UP, 100f, 100f), 1920, 1080)
+
+        // Second tap within 300ms -> enters drag mode and moves while holding
+        now += 100L
+        trackpadEngine.onTouchEvent(fingerEvent(MotionEvent.ACTION_DOWN, 100f, 100f), 1920, 1080)
+        now += 100L
+        trackpadEngine.onTouchEvent(fingerEvent(MotionEvent.ACTION_MOVE, 140f, 120f), 1920, 1080)
+        now += 100L
+        trackpadEngine.onTouchEvent(fingerEvent(MotionEvent.ACTION_UP, 140f, 120f), 1920, 1080)
+
+        val messages = mutableListOf<ControlMessage>()
+        verify(exactly = 5) { mockWriter.send(capture(messages)) }
+
+        val dragDown = messages[2] as ControlMessage.Touch
+        val dragMove = messages[3] as ControlMessage.Touch
+        val dragUp = messages[4] as ControlMessage.Touch
+
+        assertThat(dragDown.action).isEqualTo(ControlMessage.ACTION_DOWN)
+        assertThat(dragDown.actionButton).isEqualTo(ControlMessage.BUTTON_PRIMARY)
+        assertThat(dragDown.buttons).isEqualTo(ControlMessage.BUTTON_PRIMARY)
+
+        assertThat(dragMove.action).isEqualTo(ControlMessage.ACTION_MOVE)
+        assertThat(dragMove.buttons).isEqualTo(ControlMessage.BUTTON_PRIMARY)
+        assertThat(dragMove.x).isGreaterThan(dragDown.x)
+
+        assertThat(dragUp.action).isEqualTo(ControlMessage.ACTION_UP)
+        assertThat(dragUp.actionButton).isEqualTo(ControlMessage.BUTTON_PRIMARY)
+        assertThat(dragUp.buttons).isEqualTo(0)
+    }
+
+    @Test
+    fun trackpadTwoFingerSwipe_emitsHorizontalAndVerticalScroll() {
+        var now = 1000L
+        val trackpadEngine = InputEngine(
+            writer = mockWriter,
+            displayWidth = 1920,
+            displayHeight = 1080,
+            inputMode = InputMode.TRACKPAD,
+            timeProvider = { now }
+        )
+
+        val down = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_FINGER
+            every { it.pointerCount } returns 1
+            every { it.actionMasked } returns MotionEvent.ACTION_DOWN
+            every { it.x } returns 200f
+            every { it.y } returns 300f
+        }
+        val pointerDown = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_FINGER
+            every { it.pointerCount } returns 2
+            every { it.actionMasked } returns MotionEvent.ACTION_POINTER_DOWN
+            every { it.getX(0) } returns 200f
+            every { it.getY(0) } returns 300f
+        }
+        val swipe = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_FINGER
+            every { it.pointerCount } returns 2
+            every { it.actionMasked } returns MotionEvent.ACTION_MOVE
+            every { it.getX(0) } returns 225f
+            every { it.getY(0) } returns 285f
+        }
+        val finalUp = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_FINGER
+            every { it.pointerCount } returns 1
+            every { it.actionMasked } returns MotionEvent.ACTION_UP
+        }
+
+        trackpadEngine.onTouchEvent(down, 1920, 1080)
+        now += 10L
+        trackpadEngine.onTouchEvent(pointerDown, 1920, 1080)
+        now += 10L
+        trackpadEngine.onTouchEvent(swipe, 1920, 1080)
+        now += 10L
+        trackpadEngine.onTouchEvent(finalUp, 1920, 1080)
+
+        val scrollSlot = slot<ControlMessage.Scroll>()
+        verify(exactly = 1) { mockWriter.send(capture(scrollSlot)) }
+        assertThat(scrollSlot.captured.hScroll).isWithin(0.01f).of(2.5f)
+        assertThat(scrollSlot.captured.vScroll).isWithin(0.01f).of(-1.5f)
+    }
+
+    @Test
+    fun hardwareMouse_buttonDownAndUp_populatesActionButton() {
+        val downEvent = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_MOUSE
+            every { it.actionMasked } returns MotionEvent.ACTION_DOWN
+            every { it.actionButton } returns MotionEvent.BUTTON_SECONDARY
+            every { it.buttonState } returns MotionEvent.BUTTON_SECONDARY
+            every { it.x } returns 960f
+            every { it.y } returns 540f
+        }
+        val upEvent = mockk<MotionEvent>(relaxed = true).also {
+            every { it.getToolType(0) } returns MotionEvent.TOOL_TYPE_MOUSE
+            every { it.actionMasked } returns MotionEvent.ACTION_UP
+            every { it.actionButton } returns MotionEvent.BUTTON_SECONDARY
+            every { it.buttonState } returns 0
+            every { it.x } returns 960f
+            every { it.y } returns 540f
+        }
+
+        inputEngine.onTouchEvent(downEvent, 1920, 1080)
+        inputEngine.onTouchEvent(upEvent, 1920, 1080)
+
+        val messages = mutableListOf<ControlMessage.Touch>()
+        verify(exactly = 2) { mockWriter.send(capture(messages)) }
+        assertThat(messages[0].actionButton).isEqualTo(ControlMessage.BUTTON_SECONDARY)
+        assertThat(messages[0].buttons).isEqualTo(ControlMessage.BUTTON_SECONDARY)
+        assertThat(messages[1].actionButton).isEqualTo(ControlMessage.BUTTON_SECONDARY)
+        assertThat(messages[1].buttons).isEqualTo(0)
+    }
 }
