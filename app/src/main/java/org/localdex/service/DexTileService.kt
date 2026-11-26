@@ -1,5 +1,7 @@
 package org.localdex.service
 
+import android.annotation.SuppressLint
+import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -45,8 +47,26 @@ class DexTileService : TileService() {
             val appIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            appIntent?.let { startActivityAndCollapse(it) }
+            appIntent?.let { intent ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    val pendingIntent = PendingIntent.getActivity(
+                        this,
+                        0,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    startActivityAndCollapse(pendingIntent)
+                } else {
+                    launchLegacyTileActivity(intent)
+                }
+            }
         }
+    }
+
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    private fun launchLegacyTileActivity(intent: Intent) {
+        @Suppress("DEPRECATION")
+        startActivityAndCollapse(intent)
     }
 
     private fun updateTileState(state: SessionState) {
