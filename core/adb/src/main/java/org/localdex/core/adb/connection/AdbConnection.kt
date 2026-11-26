@@ -198,6 +198,9 @@ class AdbConnection(
                         }
                         AdbMessage.A_CLSE -> {
                             val localId = message.arg1
+                            streamOpenCompletions.remove(localId)?.completeExceptionally(
+                                java.io.IOException("ADB stream closed before open completed ($localId)")
+                            )
                             activeStreams[localId]?.onClosedByRemote()
                         }
                     }
@@ -317,15 +320,16 @@ class AdbConnection(
     }
 
     override fun close() {
-        if (!isConnected) return
         isConnected = false
         readerJob?.cancel()
+        readerJob = null
         activeStreams.values.forEach { it.close() }
         activeStreams.clear()
         streamOpenCompletions.values.forEach { it.cancel() }
         streamOpenCompletions.clear()
         try {
             socket?.close()
-        } catch (ignored: Exception) {}
+        } catch (_: Exception) {}
+        socket = null
     }
 }
