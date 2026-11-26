@@ -47,42 +47,47 @@ class PairingReplyReceiver : BroadcastReceiver() {
             .build()
         notificationManager.notify(NOTIFICATION_ID_PAIRING, progressNotification)
 
+        val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
-            if (pairingPort <= 0) {
-                notifyFailure(context, notificationManager, "Pairing port not found via mDNS")
-                return@launch
-            }
+            try {
+                if (pairingPort <= 0) {
+                    notifyFailure(context, notificationManager, "Pairing port not found via mDNS")
+                    return@launch
+                }
 
-            val pairingClient = AdbPairingClient(context)
-            val result = pairingClient.pair(port = pairingPort, pairingCode = pairingCode)
+                val pairingClient = AdbPairingClient(context)
+                val result = pairingClient.pair(port = pairingPort, pairingCode = pairingCode)
 
-            when (result) {
-                is PairingResult.Success -> {
-                    Log.i(TAG, "Pairing successful! Self-healing permissions...")
-                    if (connectPort > 0) {
-                        try {
-                            val conn = AdbConnection(context = context, port = connectPort, useTls = true)
-                            if (conn.connect()) {
-                                AdbPermissionManager.grantSecureSettings(conn, context.packageName)
-                                AdbPermissionManager.ensureWirelessDebuggingEnabled(context)
-                                conn.close()
+                when (result) {
+                    is PairingResult.Success -> {
+                        Log.i(TAG, "Pairing successful! Self-healing permissions...")
+                        if (connectPort > 0) {
+                            try {
+                                val conn = AdbConnection(context = context, port = connectPort, useTls = true)
+                                if (conn.connect()) {
+                                    AdbPermissionManager.grantSecureSettings(conn, context.packageName)
+                                    AdbPermissionManager.ensureWirelessDebuggingEnabled(context)
+                                    conn.close()
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Permission auto-grant error", e)
                             }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Permission auto-grant error", e)
                         }
-                    }
 
-                    val successNotification = NotificationCompat.Builder(context, LocalDeXApp.CHANNEL_PAIRING_ID)
-                        .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                        .setContentTitle("LocalDeX Paired Successfully!")
-                        .setContentText("Loopback ADB pairing complete and permissions verified.")
-                        .setAutoCancel(true)
-                        .build()
-                    notificationManager.notify(NOTIFICATION_ID_PAIRING, successNotification)
+                        val successNotification = NotificationCompat.Builder(context, LocalDeXApp.CHANNEL_PAIRING_ID)
+                            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                            .setContentTitle("LocalDeX Paired Successfully!")
+                            .setContentText("Loopback ADB pairing complete and permissions verified.")
+                            .setAutoCancel(true)
+                            .build()
+                        notificationManager.notify(NOTIFICATION_ID_PAIRING, successNotification)
+                    }
+                    is PairingResult.Failure -> {
+                        notifyFailure(context, notificationManager, result.message)
+                    }
                 }
-                is PairingResult.Failure -> {
-                    notifyFailure(context, notificationManager, result.message)
-                }
+            } finally {
+                pendingResult.finish()
             }
         }
     }
