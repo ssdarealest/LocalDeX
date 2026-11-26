@@ -52,8 +52,10 @@ fun SetupWizardSheet(
     discoveredPairingPort: Int?,
     discoveredConnectPort: Int?,
     isFreeformEnabled: Boolean = false,
+    isForceResizableEnabled: Boolean = false,
     isDesktopModeEnabled: Boolean = false,
     onToggleFreeform: ((Boolean) -> Unit)? = null,
+    onToggleForceResizable: ((Boolean) -> Unit)? = null,
     onToggleDesktopMode: ((Boolean) -> Unit)? = null,
     onRequestNotificationPermission: () -> Unit,
     onTriggerPairingNotification: (pairingPort: Int, connectPort: Int) -> Unit,
@@ -154,9 +156,18 @@ fun SetupWizardSheet(
                 if (onToggleFreeform != null) {
                     DesktopFlagToggleCard(
                         title = "Movable Freeform Windows",
-                        description = "Enables edge-resizable floating windows and force-resizable activities in DeX mode.",
+                        description = "Enables edge-resizable floating windows in One UI / DeX mode.",
                         isEnabled = isFreeformEnabled,
                         onToggle = onToggleFreeform
+                    )
+                }
+
+                if (onToggleForceResizable != null) {
+                    DesktopFlagToggleCard(
+                        title = "Force Resizable Activities",
+                        description = "Allows non-resizable apps to scale smoothly inside DeX windows.",
+                        isEnabled = isForceResizableEnabled,
+                        onToggle = onToggleForceResizable
                     )
                 }
 
