@@ -1,0 +1,80 @@
+---
+title: DeX Viewer, Floating Pill & Input Controls
+description: Managing active sessions, using the draggable Session Pill Toolbar, and navigating with Virtual Trackpad, Direct Touch, S-Pen, mouse, keyboard, and gamepad.
+icon: MousePointerClick
+---
+
+When you tap **Start DeX**, `DexSessionService` connects to loopback ADB, deploys `scrcpy-server` v3.1 (if not already matching its SHA-256 checksum), launches the virtual display on port `27183`, and opens **DexViewerActivity** in immersive landscape fullscreen.
+
+## Session Lifecycle
+
+- **Minimize without stopping:** Pressing your device's Home button minimizes the viewer while keeping the foreground service, virtual display, wake lock, and Wi-Fi lock active.
+- **Resume Viewer:** Tap **Resume Viewer** on the Home screen's floating action buttons or tap the persistent notification (`DeX Active on Display #N`).
+- **Stop Session:** Tap **Stop DeX** on the Home screen, **Stop Session** in the notification, the red **Close** button in the Floating Pill, or tap the active Quick Settings tile.
+
+## Floating Session Pill Toolbar
+
+Overlaid on top of the DeX stream is a translucent, draggable **Session Pill Toolbar**:
+
+- **Move anywhere:** Press and drag the pill to reposition it away from taskbars or window controls.
+- **Auto-dimming:** After **3 seconds** of inactivity while collapsed and with the soft keyboard closed, the pill automatically dims to **35% opacity**. Touching it, expanding it, or opening the soft keyboard restores **95% opacity**.
+- **Expand / Collapse:** Tap the handle icon (`DragHandle` / `Close`) to toggle the 4 quick controls:
+
+| Icon | Action | Behavior |
+| :--- | :--- | :--- |
+| **Mouse / Touch** | **Toggle Input Mode** | Switches dynamically between **Virtual Trackpad** (default on viewer launch) and **Direct Touch**. |
+| **Hand / Pan** | **Lock / Release Mouse Pointer** | Toggles Android Pointer Capture (`requestPointerCapture` / `releasePointerCapture`) for hardware mice. Highlighted when pointer lock is active. |
+| **Keyboard** | **Show / Hide Soft Keyboard** | Toggles Android's on-screen IME keyboard using `WindowInsetsCompat.Type.ime()`. |
+| **Close (Red)** | **Stop DeX** | Stops `DexSessionService`, closes sockets/decoder, and exits `DexViewerActivity`. |
+
+## Input Modes & Peripherals
+
+`InputEngine` translates Android motion and key events into scrcpy binary control packets targeting your virtual display resolution.
+
+<Tabs items={['Virtual Trackpad', 'Direct Touch', 'S-Pen / Stylus', 'Mouse & Keyboard', 'Gamepad']}>
+  <Tab value="Virtual Trackpad">
+    Default touch mode turning the screen into a relative touchpad for a virtual DeX pointer:
+
+    | Gesture | Action |
+    | :--- | :--- |
+    | **1-finger glide** | Moves the virtual desktop cursor (`1.35x` sensitivity multiplier). |
+    | **1-finger tap** (`< 200 ms`) | Left click (`BUTTON_PRIMARY` down + up at cursor position). |
+    | **2-finger vertical swipe** | Vertical scroll wheel at cursor position. |
+    | **2-finger tap** (`< 200 ms`) | Right click (`BUTTON_SECONDARY` down + up at cursor position). |
+  </Tab>
+  <Tab value="Direct Touch">
+    Maps finger touches directly to desktop coordinates (`viewWidth × viewHeight` scaled to `displayWidth × displayHeight`), preserving multi-touch pointer IDs and touch pressure for direct tapping, scrolling, and multi-finger interaction.
+  </Tab>
+  <Tab value="S-Pen / Stylus">
+    Whenever Android reports `TOOL_TYPE_STYLUS` or `TOOL_TYPE_ERASER`, `InputEngine` automatically routes direct precision coordinates—even while the pill is in Trackpad mode:
+
+    - **Tip contact & drag:** Left click (`BUTTON_PRIMARY`) with hardware pressure pass-through (`event.getPressure`).
+    - **Air hover (`ACTION_HOVER_MOVE`):** Moves the DeX cursor smoothly in mid-air before touching the glass.
+    - **S-Pen side button or Eraser tip:** Sends right-click (`BUTTON_SECONDARY`).
+  </Tab>
+  <Tab value="Mouse & Keyboard">
+    - **Standard Mouse:** Tracks absolute position, hover, primary/secondary/tertiary buttons, and vertical/horizontal wheel scrolling (`AXIS_VSCROLL`, `AXIS_HSCROLL`).
+    - **Pointer Capture (Mouse Lock):** Tap **Lock Mouse Pointer** in the Floating Pill to capture raw relative mouse deltas (`AXIS_RELATIVE_X`, `AXIS_RELATIVE_Y`) so Android's host screen edges never trap your cursor. Press **Back** or tap the pill button to release.
+    - **Physical Keyboard & System Back:** Forwards `KeyEvent` (`keyCode`, `repeatCount`, `metaState`) directly. Pressing Android **Back** releases Pointer Capture if active, or sends `ControlMessage.BackOrScreenOn` into Samsung DeX rather than exiting the viewer.
+  </Tab>
+  <Tab value="Gamepad">
+    Controllers reporting `SOURCE_JOYSTICK` or `SOURCE_GAMEPAD` map automatically:
+
+    | Input | Behavior |
+    | :--- | :--- |
+    | **Left Analog Stick** (`AXIS_X`, `AXIS_Y`) | Smooth desktop cursor movement (`0.15` deadzone). |
+    | **Right Analog Stick** (`AXIS_Z`, `AXIS_RZ`) | Horizontal and vertical scrolling at cursor position (`0.15` deadzone). |
+    | **D-Pad Hat Switch** (`AXIS_HAT_X`, `AXIS_HAT_Y`) | Injects `DPAD_LEFT`, `DPAD_RIGHT`, `DPAD_UP`, and `DPAD_DOWN` key events. |
+    | **Button A** (`KEYCODE_BUTTON_A`) | Injects primary left click at the virtual cursor in **Trackpad** mode (or forwards `KEYCODE_BUTTON_A` in **Direct Touch** mode). |
+  </Tab>
+</Tabs>
+
+## Viewing the Active Session from a Computer
+
+Because Samsung DeX runs on a standard Android virtual display, a computer connected via USB or wireless ADB can mirror or control the same live desktop:
+
+```bash
+scrcpy --display-id=<N>
+```
+
+Check `<N>` on the Home screen's **Hero Status Card**, in the persistent notification (`DeX Active on Display #N`), or on the **Quick Settings tile**.

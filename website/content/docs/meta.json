@@ -1,0 +1,17 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "setup-pairing",
+    "---Using LocalDeX---",
+    "display-profiles",
+    "viewer-and-controls",
+    "foldables-and-quick-settings",
+    "troubleshooting",
+    "---Architecture & Development---",
+    "technical",
+    "building-from-source"
+  ]
+}

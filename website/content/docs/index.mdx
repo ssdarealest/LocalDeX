@@ -1,0 +1,87 @@
+---
+title: Introduction
+description: Run Samsung DeX natively on your Galaxy device's own screen with no external monitor, dock, USB cable, PC, or root access.
+icon: MonitorSmartphone
+---
+
+**LocalDeX** is a Free and Open Source Software (FOSS) Android application written in **100% Kotlin** and licensed under **GPL-3.0**. It launches Samsung's native DeX desktop environment onto an on-device virtual display and renders it fullscreen directly on your phone or tablet.
+
+## Why LocalDeX?
+
+Normally, Samsung DeX on Galaxy smartphones requires plugging into an external HDMI monitor, USB-C hub, or wireless Miracast receiver. LocalDeX removes that hardware requirement by running the entire virtual display and video/input loop locally on `127.0.0.1`.
+
+- **100% On-Device:** Connects directly to Android's own `adbd` daemon over loopback (`127.0.0.1`). Zero data leaves your device.
+- **No Root Required:** Uses standard Android 11+ Wireless Debugging pairing and ADB shell permissions (`WRITE_SECURE_SETTINGS`).
+- **Low-Latency Hardware Video:** Decodes H.264 or H.265 video from bundled `scrcpy-server` v3.1 using `MediaCodec` (`KEY_LOW_LATENCY = 1`) straight to a `SurfaceView`.
+- **Desktop-Class Input:** Supports Virtual Trackpad gestures, Direct Touch, S-Pen / Stylus with air hover and 4096-level pressure sensitivity, physical keyboards and mice (with Pointer Capture lock), and gamepads.
+- **Galaxy Z Fold Ready:** Uses Jetpack WindowManager to detect hinge posture, suggest Cover vs. Inner screen profiles, and adapt the viewer layout for Tabletop Flex Mode.
+- **Strictly FOSS:** Zero Google Play Services (GMS), Firebase, ads, telemetry, or analytics.
+
+## How a Session Works
+
+<Steps>
+<Step>
+### Loopback Pairing (One-Time)
+LocalDeX discovers your device's Wireless Debugging mDNS service (`_adb-tls-pairing._tcp.`), pairs over TLS 1.3 using the 6-digit pairing code, and grants itself `WRITE_SECURE_SETTINGS`.
+</Step>
+
+<Step>
+### Self-Healing Reconnect
+Whenever LocalDeX resumes (`MainActivity.onResume`), it automatically re-enables Wireless Debugging (`adb_wifi_enabled = 1`) if Android turned it off after a reboot or Wi-Fi network change.
+</Step>
+
+<Step>
+### Virtual Display Launch
+LocalDeX verifies and pushes `scrcpy-server` v3.1 to `/data/local/tmp/scrcpy-server.jar`, launches it via `app_process` with `new_display=<width>x<height>/<dpi>`, and binds loopback sockets on port `27183`.
+</Step>
+
+<Step>
+### Fullscreen DeX Viewer
+Samsung One UI detects the trusted virtual display and starts Samsung DeX on that Display ID while `DexViewerActivity` streams the desktop video and forwards your inputs.
+</Step>
+</Steps>
+
+## Explore the Guide
+
+<Cards>
+  <Card
+    title="Requirements & Installation"
+    description="Check Android/One UI compatibility, supported Galaxy models, and APK installation."
+    href="/docs/installation"
+  />
+  <Card
+    title="Setup & Wireless Pairing"
+    description="Complete the 4-step Guided Setup Wizard and inline notification pairing."
+    href="/docs/setup-pairing"
+  />
+  <Card
+    title="Display Profiles & Video/Audio"
+    description="Tune presets, resolution, DPI, FPS, bitrate, codec, and audio forwarding."
+    href="/docs/display-profiles"
+  />
+  <Card
+    title="Viewer, Pill Toolbar & Controls"
+    description="Use the Floating Session Pill, Trackpad, Direct Touch, S-Pen, mouse lock, and gamepad."
+    href="/docs/viewer-and-controls"
+  />
+  <Card
+    title="Foldables & Quick Settings"
+    description="Galaxy Z Fold posture tracking, Tabletop Flex Mode, notifications, and QS Tile."
+    href="/docs/foldables-and-quick-settings"
+  />
+  <Card
+    title="Troubleshooting & FAQ"
+    description="Fix Wi-Fi/mDNS discovery, pairing code invalidation, window resizing, and playback quirks."
+    href="/docs/troubleshooting"
+  />
+  <Card
+    title="Technical Breakdown"
+    description="Deep dive into ADB wire framing, TLS 1.3/RSA crypto, and scrcpy-server internals."
+    href="/docs/technical"
+  />
+  <Card
+    title="Building from Source"
+    description="Compile multi-module APKs, run tests, and verify reproducible FOSS builds."
+    href="/docs/building-from-source"
+  />
+</Cards>

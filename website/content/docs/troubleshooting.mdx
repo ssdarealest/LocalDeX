@@ -1,0 +1,59 @@
+---
+title: Troubleshooting & FAQ
+description: Solutions for Wi-Fi requirements, mDNS pairing detection, expired pairing codes, reboot reconnects, freeform windows, and video/audio quirks.
+icon: Wrench
+---
+
+## Wireless Debugging & Pairing
+
+<Accordions>
+  <Accordion title="Why does LocalDeX require Wi-Fi if everything stays on my phone?" id="wifi-requirement">
+    Android's internal `adb_wifi` daemon refuses to initialize unless the device is connected to an active Wi-Fi network. LocalDeX connects exclusively to `127.0.0.1` (loopback)—no traffic is sent across your Wi-Fi router or the internet.
+  </Accordion>
+
+  <Accordion title="Pairing port not detected / Open Wireless Debugging never changes" id="mdns-discovery">
+    - Verify **Wi-Fi** is connected and **Wireless debugging** is switched ON inside **Settings → Developer options**.
+    - Keep **Wireless debugging → Pair device with pairing code** open long enough for `NsdManager` (`_adb-tls-pairing._tcp.`) to resolve the service.
+    - If mDNS discovery stalls, toggle **Wireless debugging** OFF and ON again while LocalDeX's main screen is active (`MainActivity.onResume` starts discovery; `onPause` stops it).
+  </Accordion>
+
+  <Accordion title="Pairing fails with Pairing failed or wrong code" id="pairing-code-reset">
+    Android invalidates and regenerates the 6-digit pairing PIN if you navigate away from the **Pair device with pairing code** dialog. Always enter the PIN using the **Wireless Debugging Pairing** notification's **Enter Code** inline reply while the pairing dialog remains open.
+  </Accordion>
+
+  <Accordion title="Wireless Debugging turns off after rebooting or switching Wi-Fi" id="reboot-persistence">
+    Android resets `adb_wifi_enabled` to `0` on reboots and network transitions. If Step 4 (**Auto-Reconnect Permission** / `WRITE_SECURE_SETTINGS`) is complete, opening LocalDeX once automatically sets `adb_wifi_enabled = 1` in `MainActivity.onResume()`. Otherwise, re-run Step 3 pairing so `PairingReplyReceiver` can execute `pm grant org.localdex android.permission.WRITE_SECURE_SETTINGS`.
+  </Accordion>
+</Accordions>
+
+## Display & Window Behavior
+
+### Apps open fullscreen inside DeX instead of resizable windows
+
+1. Open the **Guided Setup Wizard** (gear icon) and verify **Movable Freeform Windows** (`enable_freeform_support`) and **Force Desktop Windowing** (`force_desktop_mode_on_external_displays`) are enabled.
+2. On Android 16+ / One UI 8.5+, virtual displays may default to fullscreen windowing unless `wm set-display-windowing-mode -d <displayId> 5` (`WINDOWING_MODE_FREEFORM`) is applied. See [Technical Breakdown](/docs/technical) for details.
+
+### Galaxy Z Flip, Galaxy A/M/F, or non-Samsung phones don't show Samsung DeX
+
+Those devices do not ship Samsung's proprietary DeX firmware binaries. Enable **Force Desktop Windowing** in the Setup Wizard to launch stock Android / AOSP Freeform Desktop on the virtual display instead.
+
+### Selecting "Split-screen" from a window handle moves the app to the phone screen
+
+This is a Samsung One UI WindowManager quirk: choosing the native **Split-screen** handle option moves the app onto the primary phone display rather than splitting inside the virtual DeX display. Resize and arrange windows manually by dragging borders and title handles instead.
+
+## Video, Audio & Input
+
+- **Black screen, stutter, or decoder failure:** Open **Display Profile Editor** and switch **Video Codec** between `H.264 (Low Latency)` and `H.265 (High Efficiency)`, lower **Refresh Rate** to `60 FPS`, or reduce **Bitrate** (e.g., to `16 Mbps`).
+- **Audio is silent or echoes:** Audio forwarding defaults to **off** so DeX outputs directly through your device speakers with zero latency. Only toggle **Audio Forwarding** on (`OPUS` / `AAC` / `RAW`) if capturing loopback audio.
+- **Mouse cursor hits an invisible screen boundary:** Expand the Floating Pill and tap **Lock Mouse Pointer** to activate Android Pointer Capture. Press **Back** or tap the button again to release capture.
+- **Back gesture doesn't exit the viewer:** Android Back is intentionally intercepted in `DexViewerActivity` to release Pointer Capture (if active) or send Back into DeX. Swipe Home to minimize, or tap the red **Stop DeX** button in the Floating Pill (or notification / Quick Settings tile) to end the session.
+
+## Installation Issues
+
+### `INSTALL_FAILED_VERIFICATION_FAILURE` when installing via ADB
+
+```bash
+adb shell settings put global verifier_verify_adb_installs 0
+adb install -r LocalDeX-v1.0.0-universal.apk
+adb shell settings put global verifier_verify_adb_installs 1
+```
