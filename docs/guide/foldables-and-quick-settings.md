@@ -1,0 +1,53 @@
+---
+title: Foldables, Notifications & Quick Settings
+description: Galaxy Z Fold posture detection, Tabletop Flex Mode viewer adaptation, persistent session notification, and the Android Quick Settings tile.
+---
+
+LocalDeX integrates with Jetpack WindowManager, Android notifications, and Quick Settings so you can adapt to foldable hardware and control sessions without returning to the app launcher.
+
+## Galaxy Z Fold Posture Awareness
+
+`FoldablePostureTracker` subscribes to `WindowInfoTracker.windowLayoutInfo(activity)` to classify your device's physical hinge posture in real time:
+
+| Posture | Hinge Condition | Home Screen Suggestion |
+| :--- | :--- | :--- |
+| **`TABLETOP`** | `HALF_OPENED` with `HORIZONTAL` hinge | Suggests **`fold_inner`** (`2176 × 1812 @ 360 DPI`) |
+| **`BOOK`** | `HALF_OPENED` with `VERTICAL` hinge | Suggests **`fold_inner`** (`2176 × 1812 @ 360 DPI`) |
+| **`UNFOLDED`** | `FLAT` inner screen | Suggests **`fold_inner`** (`2176 × 1812 @ 360 DPI`) |
+| **`NORMAL`** | Closed cover screen (when a `FoldingFeature` is present) or standard slab phone (no `FoldingFeature`) | Suggests **`fold_cover`** (`2316 × 904 @ 380 DPI`) if a folding feature is present; `null` on slab phones |
+
+### Profile Auto-Suggestion Banner
+
+When the detected foldable posture recommends a different preset than your currently active profile, the Home screen displays a **Foldable Posture Detected** card (`Switch to <preset> for optimal scaling`). Tap **Apply** to switch profiles with one tap.
+
+### Tabletop Flex Mode Layout
+
+Inside `DexViewerActivity`, whenever `DevicePosture.TABLETOP` is active with valid hinge coordinates (`hingeBounds.top > 0`), the DeX `SurfaceView` automatically resizes its height to `hingeBounds.top`:
+
+- The **top half** of the unfolded screen displays your Samsung DeX desktop cleanly above the crease.
+- The **bottom half** stays clear below the hinge for comfortable thumb reach and Virtual Trackpad interaction.
+
+Unfolding flat or exiting Tabletop mode restores the `SurfaceView` back to `MATCH_PARENT`.
+
+## Persistent Session Notification
+
+While a DeX session is starting or running, `DexSessionService` runs as an Android foreground service (`connectedDevice|specialUse`) holding:
+
+- A `PARTIAL_WAKE_LOCK` (`LocalDeX:SessionWakeLock`, 4-hour safety timeout)
+- A `WIFI_MODE_FULL_HIGH_PERF` `WifiLock` (`LocalDeX:WifiLock`)
+
+The persistent notification displays:
+
+- **Title:** `DeX Active on Display #<displayId> (<width>x<height>)` (or `Starting LocalDeX Session...` while initializing)
+- **Tap body / Resume Viewer action:** Re-opens `DexViewerActivity`
+- **Stop Session action:** Terminates `scrcpy-server`, closes the loopback ADB connection, releases locks, and stops the service
+
+## Quick Settings Tile
+
+LocalDeX registers `DexTileService` (`LocalDeX`) so you can monitor and toggle sessions straight from Android's Quick Settings panel:
+
+1. Swipe down twice to open Quick Settings, tap the **Edit (pencil)** button, and drag the **LocalDeX** tile into your active tiles.
+2. Tile states update automatically from `DexSessionService.sessionState`:
+   - **Inactive (`LocalDeX` / `Tap to launch`):** Tapping opens `MainActivity` so you can select a profile and start DeX.
+   - **Unavailable (`Starting DeX...`):** Shown briefly while `scrcpy-server` is deploying and starting.
+   - **Active (`LocalDeX Active (#displayId)` / `<width>x<height>`):** Tapping stops the running DeX session immediately.

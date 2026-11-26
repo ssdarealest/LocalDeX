@@ -1,0 +1,56 @@
+---
+title: Display Profiles & Video/Audio Settings
+description: Built-in display presets, custom resolution and DPI tuning, video codecs, frame rates, bitrate, and audio forwarding options.
+---
+
+LocalDeX launches `scrcpy-server` with `--new-display=<width>x<height>/<dpi>` based on your selected **Display Profile**. Your chosen preset, custom dimensions, and stream preferences are persisted locally using Jetpack DataStore (`localdex_preferences`).
+
+## Built-in Display Presets
+
+Select any preset directly from the **Display Presets** list on the Home screen:
+
+| Preset Name | ID | Resolution | DPI | Logical Viewport | FPS | Bitrate | Best For |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **1080p Standard (16:9)** *(default)* | `1080p` | `1920 × 1080` | `240` | `1280 × 720 dp` | `60` | `16 Mbps` | Balanced 16:9 workspace on slab phones and tablets. |
+| **Native Aspect (Foldable / Slab)** | `native` | `2176 × 1812` | `360` | `967 × 805 dp` | `60` | `20 Mbps` | Taller 6:5 canvas that maximizes vertical screen space. |
+| **Galaxy Z Fold (Inner Unfolded)** | `fold_inner` | `2176 × 1812` | `360` | `967 × 805 dp` | `60` | `24 Mbps` | Galaxy Z Fold main inner screen (auto-suggested when unfolded or in Tabletop/Book mode). |
+| **Galaxy Z Fold (Cover Screen)** | `fold_cover` | `2316 × 904` | `380` | `975 × 380 dp` | `60` | `18 Mbps` | Galaxy Z Fold outer cover display in landscape. |
+| **4:3 Productivity** | `4_3` | `1920 × 1440` | `240` | `1280 × 960 dp` | `60` | `18 Mbps` | Tall document, terminal, and side-by-side window layouts. |
+| **Ultrawide (21:9)** | `ultrawide` | `2560 × 1080` | `280` | `1462 × 617 dp` | `60` | `24 Mbps` | Wide multi-window desktops matching tall 21:9 Galaxy displays. |
+
+## Customizing Your Profile
+
+Tap the **Tune** icon in the top app bar or tap the **Active Profile** card to open the **Display Profile Editor**.
+
+### Effective Logical Viewport Preview
+
+At the top of the editor, LocalDeX calculates and previews the **Effective Logical Viewport** in density-independent pixels (`dp`):
+
+```text
+logicalWidthDp  = width  * 160 / dpi
+logicalHeightDp = height * 160 / dpi
+```
+
+A live wireframe box renders your aspect ratio (`width / height`, clamped visually between `1.0:1` and `2.5:1`) so you can gauge screen proportions before launching.
+
+### Resolution & DPI
+
+- **Width (px) & Height (px):** Enter any custom pixel dimensions (for example, `2560 × 1440` for WQHD).
+- **Display Density (DPI):** Slider from **`120` to `480 DPI`** (in `30 DPI` steps):
+  - **Lower DPI** (`120–210`): Shrinks UI chrome and gives you more room for multiple floating windows.
+  - **Higher DPI** (`300–480`): Enlarges taskbar icons, window title bars, and text for easier touch legibility on smaller screens.
+
+### Performance & Encoding
+
+- **Refresh Rate:** Choose between **`60 FPS`** and **`120 FPS`**.
+- **Video Codec:**
+  - **`H.264 (Low Latency)`** (`video/avc`, default): Widest hardware decoder compatibility and minimal encode/decode latency.
+  - **`H.265 (High Efficiency)`** (`video/hevc`): Better image clarity per megabit at high resolutions/framerates.
+- **Bitrate:** Slider from **`8` to `32 Mbps`** (in `4 Mbps` steps). Higher bitrates keep fine desktop text sharp when dragging windows or scrolling.
+
+### Audio Forwarding
+
+- **Off by default (`audio=false`):** Because Samsung DeX runs directly on your device, your phone or tablet speakers already play DeX audio natively with zero latency or compression overhead.
+- **Optional Loopback Audio (`audio=true`):** Enable **Audio Forwarding** in the Profile Editor if you specifically want `scrcpy-server` to stream audio over loopback using **`OPUS`**, **`AAC`**, or **`RAW`** encoding.
+
+Tap **Save and Apply Profile** to store your custom settings as the active profile (`custom`).
