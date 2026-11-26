@@ -250,6 +250,11 @@ fun HeroStatusCard(
                     StatusWarning,
                     "Starting scrcpy-server daemon on loopback"
                 )
+                sessionState is SessionState.Error -> Triple(
+                    "Session Error",
+                    StatusError,
+                    sessionState.message
+                )
                 !isPaired -> Triple(
                     "Pairing Required",
                     StatusWarning,
@@ -289,7 +294,7 @@ fun HeroStatusCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (!isPaired || !hasSecureSettings) {
+            if (!isPaired || !hasSecureSettings || sessionState is SessionState.Error) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Card(
                     modifier = Modifier
