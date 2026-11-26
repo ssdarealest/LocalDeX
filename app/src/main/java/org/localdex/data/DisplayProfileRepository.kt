@@ -34,28 +34,40 @@ class DisplayProfileRepository(private val context: Context) {
         if (preset != null) {
             preset
         } else {
-            val codecName = prefs[KEY_CUSTOM_CODEC] ?: DisplayProfile.VideoCodec.H264.name
-            val codec = DisplayProfile.VideoCodec.entries.find { it.name == codecName }
-                ?: DisplayProfile.VideoCodec.H264
-
-            val audioCodecName = prefs[KEY_CUSTOM_AUDIO_CODEC] ?: DisplayProfile.AudioCodec.OPUS.name
-            val audioCodec = DisplayProfile.AudioCodec.entries.find { it.name == audioCodecName }
-                ?: DisplayProfile.AudioCodec.OPUS
-
-            DisplayProfile(
-                id = "custom",
-                name = "Custom",
-                width = prefs[KEY_CUSTOM_WIDTH] ?: 1920,
-                height = prefs[KEY_CUSTOM_HEIGHT] ?: 1080,
-                dpi = prefs[KEY_CUSTOM_DPI] ?: 240,
-                maxFps = prefs[KEY_CUSTOM_FPS] ?: 60,
-                bitRateMbps = prefs[KEY_CUSTOM_BITRATE] ?: 16,
-                codec = codec,
-                audioEnabled = prefs[KEY_CUSTOM_AUDIO_ENABLED] ?: false,
-                audioCodec = audioCodec,
-                isCustom = true
-            )
+            buildCustomProfile(prefs)
         }
+    }
+
+    val customProfileFlow: Flow<DisplayProfile?> = context.dataStore.data.map { prefs ->
+        if (prefs.contains(KEY_CUSTOM_WIDTH) || prefs[KEY_SELECTED_PROFILE_ID] == "custom") {
+            buildCustomProfile(prefs)
+        } else {
+            null
+        }
+    }
+
+    private fun buildCustomProfile(prefs: androidx.datastore.preferences.core.Preferences): DisplayProfile {
+        val codecName = prefs[KEY_CUSTOM_CODEC] ?: DisplayProfile.VideoCodec.H264.name
+        val codec = DisplayProfile.VideoCodec.entries.find { it.name == codecName }
+            ?: DisplayProfile.VideoCodec.H264
+
+        val audioCodecName = prefs[KEY_CUSTOM_AUDIO_CODEC] ?: DisplayProfile.AudioCodec.OPUS.name
+        val audioCodec = DisplayProfile.AudioCodec.entries.find { it.name == audioCodecName }
+            ?: DisplayProfile.AudioCodec.OPUS
+
+        return DisplayProfile(
+            id = "custom",
+            name = "Custom",
+            width = prefs[KEY_CUSTOM_WIDTH] ?: 1920,
+            height = prefs[KEY_CUSTOM_HEIGHT] ?: 1080,
+            dpi = prefs[KEY_CUSTOM_DPI] ?: 240,
+            maxFps = prefs[KEY_CUSTOM_FPS] ?: 60,
+            bitRateMbps = prefs[KEY_CUSTOM_BITRATE] ?: 16,
+            codec = codec,
+            audioEnabled = prefs[KEY_CUSTOM_AUDIO_ENABLED] ?: false,
+            audioCodec = audioCodec,
+            isCustom = true
+        )
     }
 
     val inputModeFlow: Flow<InputMode> = context.dataStore.data.map { prefs ->
