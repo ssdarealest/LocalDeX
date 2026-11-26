@@ -1,3 +1,8 @@
+---
+title: Technical Breakdown
+description: Deep dive into LocalDeX's loopback ADB over TLS 1.3 stack, virtual display creation, MediaCodec pipeline, and peripheral input architecture.
+---
+
 # LocalDeX — Technical Breakdown
 
 An in-depth technical analysis of how **LocalDeX** runs Samsung DeX natively on a Galaxy device's own screen with no external display, no dock, no PC, no cables, and no root access.
