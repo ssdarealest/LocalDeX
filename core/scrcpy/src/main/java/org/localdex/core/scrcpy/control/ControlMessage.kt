@@ -2,6 +2,7 @@ package org.localdex.core.scrcpy.control
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import kotlin.math.roundToInt
 
 sealed class ControlMessage {
 
@@ -95,7 +96,7 @@ sealed class ControlMessage {
     }
 
     /**
-     * Injects mouse wheel / trackpad scroll event.
+     * Injects mouse wheel / trackpad scroll event (21-byte scrcpy v3.1 fixed-point format).
      */
     data class Scroll(
         val x: Int,
@@ -107,16 +108,24 @@ sealed class ControlMessage {
         val buttons: Int = 0
     ) : ControlMessage() {
         override fun toByteArray(): ByteArray {
-            val buffer = ByteBuffer.allocate(25)
+            val buffer = ByteBuffer.allocate(21)
             buffer.put(TYPE_INJECT_SCROLL_EVENT.toByte())
             buffer.putInt(x)
             buffer.putInt(y)
             buffer.putShort(displayWidth.toShort())
             buffer.putShort(displayHeight.toShort())
-            buffer.putFloat(hScroll)
-            buffer.putFloat(vScroll)
+            buffer.putShort(toFixedPoint16(hScroll))
+            buffer.putShort(toFixedPoint16(vScroll))
             buffer.putInt(buttons)
             return buffer.array()
+        }
+
+        private fun toFixedPoint16(value: Float): Short {
+            val clamped = value.coerceIn(-1f, 1f)
+            return (clamped * 32768f)
+                .roundToInt()
+                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                .toShort()
         }
     }
 
