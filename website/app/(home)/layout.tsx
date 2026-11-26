@@ -1,0 +1,13 @@
+import { HomeLayout } from '@/layouts/home';
+import { baseOptions } from '@/lib/layout.shared';
+
+export default function Layout({ children }: LayoutProps<'/'>) {
+  return (
+    <HomeLayout
+      {...baseOptions()}
+      className="ld-home-backdrop"
+    >
+      {children}
+    </HomeLayout>
+  );
+}
