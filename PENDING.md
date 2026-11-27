@@ -66,20 +66,20 @@ These gaps were identified directly in the codebase and must be resolved before 
 
 ## 3. Testing, CI/CD & Documentation Sync
 
-### 3.1 Expand Automated Test Suite (`:core:adb`, `:core:scrcpy`, `:app`) — 🚧 Partially Completed
+### 3.1 Expand Automated Test Suite (`:core:adb`, `:core:scrcpy`, `:app`) — ✅ Implemented
 - **Completed:**
   - [x] Added loopback socket / mock stream tests across `:core:adb` and `:core:scrcpy`: `Spake25519Test`, `AdbPairingClientTest`, `AdbConnectionTest`, `ScrcpyLoopbackBridgeTest`, `ScrcpyServerManagerTest`, `VideoStreamDecoderTest`, `AudioStreamDecoderTest`, `ControlSocketWriterTest`, and `InputEngineTest`.
-- **Remaining:**
-  - [ ] Add `:app` unit/instrumentation tests for `DisplayProfileRepository` (DataStore serialization) and Compose UI state rendering (`HeroStatusCard` error/running/unpaired states, `SetupWizardSheet` checklist).
+  - [x] Added `:app` tests for `DisplayProfileRepository` (`PreferenceDataStoreFactory` serialization) and Compose UI state rendering (`HeroStatusCardTest` and `SetupWizardSheetTest` with Robolectric).
 
 ### 3.2 Add Continuous Integration for PRs & Website (`/.github/workflows/`) — ✅ Implemented
 - **Completed:**
-  - [x] Added `.github/workflows/ci.yml` running `./gradlew test --stacktrace` + `./gradlew lintDebug --stacktrace` and `website/` `pnpm install --frozen-lockfile && pnpm types:check && pnpm build` on every `push` to `main` and `pull_request`.
+  - [x] Added `.github/workflows/ci.yml` running `./gradlew test --stacktrace` + `./gradlew lintDebug --stacktrace` and `website/` `pnpm install --frozen-lockfile && pnpm sync:docs:check && pnpm types:check && pnpm build` on every `push` to `main` and `pull_request`.
 
-### 3.3 Website Assets & Docs Synchronization (`website/`, `docs/`)
-- **Plan / Approach:**
-  1. Replace the hero placeholder in `website/app/(home)/page.tsx` with a `1280 × 1150 px` screenshot/graphic saved at `website/public/hero.png`.
-  2. Add a sync script (or single-source build step) keeping `docs/guide/` + `docs/TECHNICAL.md` synchronized with `website/content/docs/` so edits in `docs/` update the website automatically without breaking standalone Vercel/Next.js builds.
+### 3.3 Website Assets & Docs Synchronization (`website/`, `docs/`) — 🚧 Partially Completed
+- **Completed:**
+  - [x] Added `website/scripts/sync-docs.mjs` (`sync:docs`, `sync:docs:check`, `prebuild`) keeping `docs/guide/` + `docs/TECHNICAL.md` synchronized into `website/content/docs/` while skipping cleanly on standalone `website/` builds where `../docs` is absent, enforced via CI.
+- **Remaining:**
+  - [ ] Replace the hero placeholder in `website/app/(home)/page.tsx` with a `1280 × 1150 px` screenshot/graphic saved at `website/public/hero.png`.
 
 ---
 
