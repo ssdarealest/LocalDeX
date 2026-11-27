@@ -1,6 +1,7 @@
 package org.localdex.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -21,6 +22,9 @@ class DisplayProfileRepository(private val context: Context) {
         private val KEY_CUSTOM_DPI = intPreferencesKey("custom_dpi")
         private val KEY_CUSTOM_FPS = intPreferencesKey("custom_fps")
         private val KEY_CUSTOM_BITRATE = intPreferencesKey("custom_bitrate")
+        private val KEY_CUSTOM_CODEC = stringPreferencesKey("custom_codec")
+        private val KEY_CUSTOM_AUDIO_ENABLED = booleanPreferencesKey("custom_audio_enabled")
+        private val KEY_CUSTOM_AUDIO_CODEC = stringPreferencesKey("custom_audio_codec")
         private val KEY_INPUT_MODE = stringPreferencesKey("input_mode")
     }
 
@@ -30,6 +34,14 @@ class DisplayProfileRepository(private val context: Context) {
         if (preset != null) {
             preset
         } else {
+            val codecName = prefs[KEY_CUSTOM_CODEC] ?: DisplayProfile.VideoCodec.H264.name
+            val codec = DisplayProfile.VideoCodec.entries.find { it.name == codecName }
+                ?: DisplayProfile.VideoCodec.H264
+
+            val audioCodecName = prefs[KEY_CUSTOM_AUDIO_CODEC] ?: DisplayProfile.AudioCodec.OPUS.name
+            val audioCodec = DisplayProfile.AudioCodec.entries.find { it.name == audioCodecName }
+                ?: DisplayProfile.AudioCodec.OPUS
+
             DisplayProfile(
                 id = "custom",
                 name = "Custom",
@@ -38,6 +50,9 @@ class DisplayProfileRepository(private val context: Context) {
                 dpi = prefs[KEY_CUSTOM_DPI] ?: 240,
                 maxFps = prefs[KEY_CUSTOM_FPS] ?: 60,
                 bitRateMbps = prefs[KEY_CUSTOM_BITRATE] ?: 16,
+                codec = codec,
+                audioEnabled = prefs[KEY_CUSTOM_AUDIO_ENABLED] ?: false,
+                audioCodec = audioCodec,
                 isCustom = true
             )
         }
@@ -64,6 +79,9 @@ class DisplayProfileRepository(private val context: Context) {
             prefs[KEY_CUSTOM_DPI] = profile.dpi
             prefs[KEY_CUSTOM_FPS] = profile.maxFps
             prefs[KEY_CUSTOM_BITRATE] = profile.bitRateMbps
+            prefs[KEY_CUSTOM_CODEC] = profile.codec.name
+            prefs[KEY_CUSTOM_AUDIO_ENABLED] = profile.audioEnabled
+            prefs[KEY_CUSTOM_AUDIO_CODEC] = profile.audioCodec.name
         }
     }
 

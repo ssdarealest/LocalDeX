@@ -53,6 +53,7 @@ import org.localdex.ui.theme.StatusActive
 import org.localdex.ui.theme.StatusError
 import org.localdex.ui.theme.StatusSuccess
 import org.localdex.ui.theme.StatusWarning
+import org.localdex.ui.foldable.FoldableState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +63,7 @@ fun HomeScreen(
     hasSecureSettings: Boolean,
     activeProfile: DisplayProfile,
     allProfiles: List<DisplayProfile>,
+    foldableState: FoldableState = FoldableState(),
     onSelectProfile: (DisplayProfile) -> Unit,
     onStartDeX: () -> Unit,
     onStopDeX: () -> Unit,
@@ -141,6 +143,53 @@ fun HomeScreen(
                     hasSecureSettings = hasSecureSettings,
                     onOpenSetup = onOpenSetup
                 )
+            }
+
+            // Foldable posture profile auto-suggestion
+            if (foldableState.suggestedProfileId != null && activeProfile.id != foldableState.suggestedProfileId) {
+                val suggested = allProfiles.find { it.id == foldableState.suggestedProfileId }
+                if (suggested != null) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectProfile(suggested) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.AspectRatio,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Foldable Posture Detected",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Text(
+                                        text = "Switch to ${suggested.name} for optimal scaling",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                                Text(
+                                    text = "Apply",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // 2. Active Display Profile Quick Card
