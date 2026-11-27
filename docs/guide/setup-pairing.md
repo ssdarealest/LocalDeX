@@ -1,0 +1,77 @@
+---
+title: Setup & Wireless Pairing
+description: Complete the 4-step Guided Setup Wizard, pair with Android Wireless Debugging inline, and enable One UI desktop enhancements.
+---
+
+Pairing LocalDeX is a **one-time process**. Once paired, LocalDeX holds `WRITE_SECURE_SETTINGS` and automatically keeps Wireless Debugging ready whenever you open the app.
+
+## Home Screen Readiness Statuses
+
+At the top of the home screen, the **Hero Status Card** displays your current readiness state:
+
+| Status | Meaning |
+| :--- | :--- |
+| **Pairing Required** | Neither `WRITE_SECURE_SETTINGS` nor an active Wireless Debugging connect endpoint is detected. Open the Setup Wizard to pair. |
+| **Ready to Connect** | A Wireless Debugging connect endpoint was discovered via mDNS, but `WRITE_SECURE_SETTINGS` has not yet been granted for auto-reconnect. |
+| **Ready to Launch** | Pairing and `WRITE_SECURE_SETTINGS` are verified. Tap **Start DeX** to launch your session. |
+| **Launching Virtual Display...** | `DexSessionService` is connecting over loopback ADB and starting `scrcpy-server`. |
+| **Session Active (Display `#N`)** | Samsung DeX is actively running on virtual display `#N`. |
+| **Session Error** | Displays connection, SHA-256 verification, or server launch error details with a quick Setup & Retry link. |
+
+To open the **Guided Setup Wizard** at any time, tap the **Settings (gear)** icon in the top app bar or tap **Tap to complete Setup Wizard** on the status card.
+
+## Guided Setup Wizard (4 Steps)
+
+### Step 1: Notification Permission
+
+LocalDeX needs notification access so you can submit the 6-digit pairing PIN from the notification shade **without leaving Android's pairing screen** (leaving that screen cancels or regenerates the PIN).
+
+- Tap **Grant Permission** and allow notifications when prompted.
+- On Android 11 and 12, this step is automatically marked complete.
+
+### Step 2: Developer Options
+
+Android Wireless Debugging lives inside Developer Options.
+
+1. If Developer Options is not yet enabled, open **Settings → About phone → Software information** and tap **Build number** 7 times.
+2. Tap **Open Settings** in Step 2 to jump directly to Android's **Developer options** screen (`ACTION_APPLICATION_DEVELOPMENT_SETTINGS`).
+
+### Step 3: Wireless Debugging Pairing
+
+While LocalDeX's main screen is active, it runs mDNS discovery (`NsdManager`) for `_adb-tls-pairing._tcp.` and `_adb-tls-connect._tcp.`:
+
+1. Make sure your device is connected to **Wi-Fi**.
+2. In **Developer options**, toggle **Wireless debugging** ON and tap into the **Wireless debugging** menu.
+3. Tap **Pair device with pairing code** to display the 6-digit PIN and local pairing port.
+4. Once LocalDeX detects the pairing service (or from the Setup Wizard), tap **Show Reply Notification**.
+   - *Before detection*, the button reads **Open Wireless Debugging** so you can jump back to Settings.
+   - *After detection*, the step displays `"Pairing service detected on port <port>! Tap below to open notification reply."`
+5. Pull down your notification shade, find **Wireless Debugging Pairing**, tap **Enter Code**, type the 6-digit PIN, and submit.
+
+`PairingReplyReceiver` authenticates over TLS 1.3 to `127.0.0.1:<pairing_port>` using LocalDeX's generated RSA-2048 credentials.
+
+### Step 4: Auto-Reconnect Permission (`WRITE_SECURE_SETTINGS`)
+
+Immediately after pairing succeeds (if the `_adb-tls-connect._tcp.` port is available), LocalDeX opens a loopback ADB connection and runs:
+
+```sh
+pm grant org.localdex android.permission.WRITE_SECURE_SETTINGS
+```
+
+This grants the permission automatically—no computer required. Once held, every time you open LocalDeX (`MainActivity.onResume`), it calls:
+
+```kotlin
+Settings.Global.putInt(context.contentResolver, "adb_wifi_enabled", 1)
+```
+
+This silently restores Wireless Debugging if Android turns it off after a reboot or Wi-Fi network switch.
+
+## One UI Desktop Enhancements
+
+Once `WRITE_SECURE_SETTINGS` is granted, the bottom of the **Guided Setup Wizard** unlocks **One UI Desktop Enhancements**:
+
+| Toggle | Global Setting Modified | Effect |
+| :--- | :--- | :--- |
+| **Movable Freeform Windows** | `enable_freeform_support` | Enables freeform windowing and edge-resizable floating app windows inside DeX mode. |
+| **Force Resizable Activities** | `force_resizable_activities` | Allows non-resizable apps to scale smoothly inside floating DeX windows. |
+| **Force Desktop Windowing** | `force_desktop_mode_on_external_displays` | Forces desktop mode on secondary virtual displays across all apps (also enables AOSP desktop fallback on non-DeX devices). |

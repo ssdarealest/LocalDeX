@@ -22,7 +22,8 @@ import java.nio.ByteBuffer
 class VideoStreamDecoder(
     private val host: String = "127.0.0.1",
     private val port: Int,
-    private val surface: Surface
+    private val surface: Surface,
+    private val readDummyByte: Boolean = true
 ) : Closeable {
 
     companion object {
@@ -32,6 +33,7 @@ class VideoStreamDecoder(
     }
 
     private var socket: Socket? = null
+    private var inputStream: DataInputStream? = null
     private var mediaCodec: MediaCodec? = null
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private var decodeJob: Job? = null
@@ -42,7 +44,11 @@ class VideoStreamDecoder(
     var videoHeight = 0
         private set
 
-    suspend fun start(): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * Connects to the scrcpy video socket and consumes the forward-tunnel dummy byte
+     * before audio/control sockets are connected.
+     */
+    suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         try {
             Log.i(TAG, "Connecting to video stream socket at $host:$port...")
             val s = Socket()
@@ -51,6 +57,26 @@ class VideoStreamDecoder(
             socket = s
 
             val dis = DataInputStream(s.getInputStream())
+            inputStream = dis
+
+            // Consume scrcpy forward-tunnel dummy byte if enabled on first socket
+            if (readDummyByte) {
+                dis.readByte()
+            }
+            return@withContext true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to connect video stream socket", e)
+            close()
+            return@withContext false
+        }
+    }
+
+    /**
+     * Reads device/video headers and starts the MediaCodec decode loop after [connect].
+     */
+    suspend fun startStreaming(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val dis = inputStream ?: return@withContext false
 
             // 1. Read 64-byte device name header
             val deviceNameBytes = ByteArray(64)
@@ -95,6 +121,8 @@ class VideoStreamDecoder(
             return@withContext false
         }
     }
+
+    suspend fun start(): Boolean = connect() && startStreaming()
 
     private fun startDemuxAndDecodeLoop(dis: DataInputStream, codec: MediaCodec) {
         decodeJob = scope.launch {
@@ -153,18 +181,21 @@ class VideoStreamDecoder(
     }
 
     override fun close() {
-        if (!isRunning) return
         isRunning = false
         decodeJob?.cancel()
+        decodeJob = null
         try {
             mediaCodec?.stop()
+        } catch (_: Exception) {}
+        try {
             mediaCodec?.release()
-        } catch (ignored: Exception) {}
+        } catch (_: Exception) {}
         mediaCodec = null
 
         try {
             socket?.close()
-        } catch (ignored: Exception) {}
+        } catch (_: Exception) {}
         socket = null
+        inputStream = null
     }
 }

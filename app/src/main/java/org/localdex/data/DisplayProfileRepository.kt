@@ -1,6 +1,8 @@
 package org.localdex.data
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -13,7 +15,11 @@ import org.localdex.core.scrcpy.model.DisplayProfile
 
 private val Context.dataStore by preferencesDataStore(name = "localdex_preferences")
 
-class DisplayProfileRepository(private val context: Context) {
+class DisplayProfileRepository internal constructor(
+    private val dataStore: DataStore<Preferences>
+) {
+
+    constructor(context: Context) : this(context.dataStore)
 
     companion object {
         private val KEY_SELECTED_PROFILE_ID = stringPreferencesKey("selected_profile_id")
@@ -28,37 +34,49 @@ class DisplayProfileRepository(private val context: Context) {
         private val KEY_INPUT_MODE = stringPreferencesKey("input_mode")
     }
 
-    val selectedProfileFlow: Flow<DisplayProfile> = context.dataStore.data.map { prefs ->
+    val selectedProfileFlow: Flow<DisplayProfile> = dataStore.data.map { prefs ->
         val profileId = prefs[KEY_SELECTED_PROFILE_ID] ?: DisplayProfile.PRESET_1080P.id
         val preset = DisplayProfile.DEFAULT_PRESETS.find { it.id == profileId }
         if (preset != null) {
             preset
         } else {
-            val codecName = prefs[KEY_CUSTOM_CODEC] ?: DisplayProfile.VideoCodec.H264.name
-            val codec = DisplayProfile.VideoCodec.entries.find { it.name == codecName }
-                ?: DisplayProfile.VideoCodec.H264
-
-            val audioCodecName = prefs[KEY_CUSTOM_AUDIO_CODEC] ?: DisplayProfile.AudioCodec.OPUS.name
-            val audioCodec = DisplayProfile.AudioCodec.entries.find { it.name == audioCodecName }
-                ?: DisplayProfile.AudioCodec.OPUS
-
-            DisplayProfile(
-                id = "custom",
-                name = "Custom",
-                width = prefs[KEY_CUSTOM_WIDTH] ?: 1920,
-                height = prefs[KEY_CUSTOM_HEIGHT] ?: 1080,
-                dpi = prefs[KEY_CUSTOM_DPI] ?: 240,
-                maxFps = prefs[KEY_CUSTOM_FPS] ?: 60,
-                bitRateMbps = prefs[KEY_CUSTOM_BITRATE] ?: 16,
-                codec = codec,
-                audioEnabled = prefs[KEY_CUSTOM_AUDIO_ENABLED] ?: false,
-                audioCodec = audioCodec,
-                isCustom = true
-            )
+            buildCustomProfile(prefs)
         }
     }
 
-    val inputModeFlow: Flow<InputMode> = context.dataStore.data.map { prefs ->
+    val customProfileFlow: Flow<DisplayProfile?> = dataStore.data.map { prefs ->
+        if (prefs.contains(KEY_CUSTOM_WIDTH) || prefs[KEY_SELECTED_PROFILE_ID] == "custom") {
+            buildCustomProfile(prefs)
+        } else {
+            null
+        }
+    }
+
+    private fun buildCustomProfile(prefs: androidx.datastore.preferences.core.Preferences): DisplayProfile {
+        val codecName = prefs[KEY_CUSTOM_CODEC] ?: DisplayProfile.VideoCodec.H264.name
+        val codec = DisplayProfile.VideoCodec.entries.find { it.name == codecName }
+            ?: DisplayProfile.VideoCodec.H264
+
+        val audioCodecName = prefs[KEY_CUSTOM_AUDIO_CODEC] ?: DisplayProfile.AudioCodec.OPUS.name
+        val audioCodec = DisplayProfile.AudioCodec.entries.find { it.name == audioCodecName }
+            ?: DisplayProfile.AudioCodec.OPUS
+
+        return DisplayProfile(
+            id = "custom",
+            name = "Custom",
+            width = prefs[KEY_CUSTOM_WIDTH] ?: 1920,
+            height = prefs[KEY_CUSTOM_HEIGHT] ?: 1080,
+            dpi = prefs[KEY_CUSTOM_DPI] ?: 240,
+            maxFps = prefs[KEY_CUSTOM_FPS] ?: 60,
+            bitRateMbps = prefs[KEY_CUSTOM_BITRATE] ?: 16,
+            codec = codec,
+            audioEnabled = prefs[KEY_CUSTOM_AUDIO_ENABLED] ?: false,
+            audioCodec = audioCodec,
+            isCustom = true
+        )
+    }
+
+    val inputModeFlow: Flow<InputMode> = dataStore.data.map { prefs ->
         when (prefs[KEY_INPUT_MODE]) {
             InputMode.DIRECT_TOUCH.name -> InputMode.DIRECT_TOUCH
             else -> InputMode.TRACKPAD
@@ -66,13 +84,13 @@ class DisplayProfileRepository(private val context: Context) {
     }
 
     suspend fun selectProfile(profileId: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_SELECTED_PROFILE_ID] = profileId
         }
     }
 
     suspend fun saveCustomProfile(profile: DisplayProfile) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_SELECTED_PROFILE_ID] = "custom"
             prefs[KEY_CUSTOM_WIDTH] = profile.width
             prefs[KEY_CUSTOM_HEIGHT] = profile.height
@@ -86,7 +104,7 @@ class DisplayProfileRepository(private val context: Context) {
     }
 
     suspend fun saveInputMode(mode: InputMode) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_INPUT_MODE] = mode.name
         }
     }

@@ -1,0 +1,186 @@
+---
+title: Deploy Website on Cloudflare Workers
+description: Step-by-step guide to bundling and deploying LocalDeX's Next.js 16 + Fumadocs website to Cloudflare Workers with OpenNext and Wrangler.
+---
+
+LocalDeX's documentation and landing application lives in `website/` and uses **Next.js 16** (App Router), **Fumadocs MDX**, server-side Orama search (`/api/search`), Markdown endpoints (`/llms.txt`, `/llms-full.txt`, `/docs/*.md`), and build-time Open Graph image routes (`/og/docs/...`). Because it includes dynamic API and App Router handlers, deploy it to **Cloudflare Workers** using the official **OpenNext Cloudflare adapter (`@opennextjs/cloudflare`)**.
+
+## Prerequisites
+
+- **Cloudflare account** (`Workers` enabled; note the **Paid plan**'s 10 MiB compressed Worker limit is recommended if Next.js server/search bundles exceed the 3 MiB Free-tier limit)
+- **Node.js 22+** and **pnpm 10** matching `.github/workflows/ci.yml`
+- Authenticated Wrangler CLI (`pnpm dlx wrangler login`) or a Cloudflare API token for CI/Git deployments
+
+> **Before deploying:** If you haven't replaced the homepage hero placeholder yet, save your `1280 × 1150 px` screenshot at `website/public/hero.png` and wire it in `website/app/(home)/page.tsx`.
+
+## 1. Install OpenNext & Wrangler
+
+Run inside `website/`:
+
+```bash
+cd website
+pnpm add -D @opennextjs/cloudflare@latest wrangler@latest
+```
+
+Wrangler `v3.99.0` or newer is required for static asset routing (`ASSETS` binding) with OpenNext.
+
+## 2. Configure `next.config.mjs`, `open-next.config.ts`, and `wrangler.jsonc`
+
+### Update `website/next.config.mjs`
+
+Ensure Next.js Image Optimization doesn't require an unsupported default optimization binary on Workers unless configured with Cloudflare Images:
+
+```js
+import { createMDX } from 'fumadocs-mdx/next';
+
+const withMDX = createMDX();
+
+/** @type {import('next').NextConfig} */
+const config = {
+  reactStrictMode: true,
+  images: {
+    unoptimized: true,
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/docs/:path*.md',
+        destination: '/llms.mdx/docs/:path*.md',
+      },
+      {
+        source: '/docs/:path*.txt',
+        destination: '/llms.mdx/docs/:path*.txt',
+      },
+    ];
+  },
+};
+
+export default withMDX(config);
+```
+
+### Add `website/open-next.config.ts`
+
+Create the OpenNext adapter configuration:
+
+```ts
+import { defineCloudflareConfig } from '@opennextjs/cloudflare';
+
+export default defineCloudflareConfig({
+  // Optional: configure R2 incremental cache here if needed later
+});
+```
+
+### Add `website/wrangler.jsonc`
+
+Map OpenNext's generated worker entrypoint and static asset directory:
+
+```jsonc
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "localdex-website",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+}
+```
+
+### Ignore OpenNext Build Outputs in `website/.gitignore`
+
+Append these lines to `website/.gitignore` so local Worker build artifacts aren't committed:
+
+```text
+.open-next
+.wrangler
+```
+
+## 3. Add Cloudflare Scripts to `website/package.json`
+
+Keep the existing `prebuild` hook (`node scripts/sync-docs.mjs`) and add Worker preview/deploy scripts:
+
+```json
+{
+  "scripts": {
+    "sync:docs": "node scripts/sync-docs.mjs",
+    "sync:docs:check": "node scripts/sync-docs.mjs --check",
+    "prebuild": "node scripts/sync-docs.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "build:cloudflare": "pnpm sync:docs && npx opennextjs-cloudflare build",
+    "preview:cloudflare": "pnpm build:cloudflare && npx opennextjs-cloudflare preview",
+    "deploy:cloudflare": "pnpm build:cloudflare && npx opennextjs-cloudflare deploy",
+    "types:check": "next typegen && tsc --noEmit"
+  }
+}
+```
+
+## 4. Verify Locally & Deploy Manually
+
+1. **Test in Wrangler's local Workers runtime:**
+   ```bash
+   cd website
+   pnpm preview:cloudflare
+   ```
+   Verify `/`, `/docs`, `/docs/technical.md`, `/llms.txt`, `/llms-full.txt`, `/og/docs/index/image.png`, and `/api/search?query=dex`.
+2. **Deploy directly from your machine:**
+   ```bash
+   cd website
+   pnpm dlx wrangler login
+   pnpm deploy:cloudflare
+   ```
+
+## 5. Automated Git Deployments (Cloudflare Dashboard or GitHub Actions)
+
+### Option A: Cloudflare Workers Builds (Git Integration)
+
+In the **Cloudflare Dashboard → Workers & Pages → Create → Import a repository**:
+
+- **Root directory:** `/` *(recommended)* or `/website`
+- **If Root directory is `/`:**
+  - **Build command:** `pnpm --dir website install --frozen-lockfile && pnpm --dir website build:cloudflare`
+  - **Deploy command:** `pnpm --dir website exec opennextjs-cloudflare deploy`
+  - Because `docs/` is visible from repo root, `sync-docs.mjs` automatically syncs `docs/guide/*.md` and `docs/TECHNICAL.md` before bundling.
+- **If Root directory is `website`:**
+  - **Build command:** `pnpm install --frozen-lockfile && npx opennextjs-cloudflare build`
+  - **Deploy command:** `npx opennextjs-cloudflare deploy`
+  - `website/scripts/sync-docs.mjs` detects that `../docs` is outside the root directory and exits cleanly, using the committed MDX files in `website/content/docs/`.
+
+### Option B: GitHub Actions Deploy Job
+
+Add a deploy job authenticated with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets after CI passes:
+
+```yaml
+deploy-website:
+  needs: [website]
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  defaults:
+    run:
+      working-directory: website
+  steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'pnpm'
+        cache-dependency-path: website/pnpm-lock.yaml
+    - run: pnpm install --frozen-lockfile
+    - run: pnpm deploy:cloudflare
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+## Notes Specific to LocalDeX Website
+
+- **Pre-rendered OG & Docs:** `website/app/opengraph-image.tsx` and `website/app/og/docs/[...slug]/route.tsx` set `export const revalidate = false`, so PNG cards are generated statically at build time into `.open-next/assets` instead of running `satori`/`ImageResponse` inside every Worker invocation.
+- **Search Index (`/api/search`):** `fumadocs-core/search/server` loads the compiled search data through Cloudflare `nodejs_compat`; keep `compatibility_flags: ["nodejs_compat"]` enabled in `wrangler.jsonc`.
+- **Custom Domain:** After the first deploy, attach your domain under **Workers & Pages → `<your-worker>` → Settings → Domains & Routes**.

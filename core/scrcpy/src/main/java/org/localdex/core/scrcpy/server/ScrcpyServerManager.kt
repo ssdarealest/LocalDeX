@@ -2,16 +2,19 @@ package org.localdex.core.scrcpy.server
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.localdex.core.adb.connection.AdbConnection
 import org.localdex.core.adb.connection.AdbStream
 import org.localdex.core.scrcpy.model.DisplayProfile
-import java.io.InputStream
 import java.security.MessageDigest
 
 data class ScrcpySessionInfo(
@@ -33,22 +36,42 @@ class ScrcpyServerManager(
         const val SERVER_ASSET_NAME = "scrcpy-server"
         const val SCRCPY_VERSION = "3.1"
         const val DEFAULT_SCRCPY_PORT = 27183
+        const val DEFAULT_SCID = -1
         const val EXPECTED_SERVER_SHA256 = "958f0944a62f23b1f33a16e9eb14844c1a04b882ca175a738c16d23cb22b86c0"
 
+        private val DISPLAY_ID_PATTERNS = listOf(
+            Regex("""(?:display(?:_id|\s+id)|mDisplayId|Display Id)\s*[:=]\s*(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""\(id=(\d+)\)""", RegexOption.IGNORE_CASE),
+            Regex("""\bid=(\d+)\b""", RegexOption.IGNORE_CASE)
+        )
+
         /**
-         * Builds the shell invocation string for starting scrcpy-server via app_process.
+         * Returns the ADB UNIX abstract socket destination for [scid].
          */
-        fun buildServerCommand(profile: DisplayProfile): String {
+        fun socketDestination(scid: Int = DEFAULT_SCID): String {
+            return if (scid < 0) {
+                "localabstract:scrcpy"
+            } else {
+                "localabstract:scrcpy_%08x".format(scid)
+            }
+        }
+
+        /**
+         * Builds the shell invocation string for starting scrcpy-server via app_process
+         * in forward-tunnel mode (localabstract socket bridged over loopback ADB).
+         */
+        fun buildServerCommand(profile: DisplayProfile, scid: Int = DEFAULT_SCID): String {
             val bitRateBps = profile.bitRateMbps * 1000 * 1000
             val displayArg = profile.toNewDisplayArg()
+            val scidArg = if (scid < 0) "-1" else "%x".format(scid)
 
             return buildString {
                 append("CLASSPATH=$SERVER_REMOTE_PATH app_process / com.genymobile.scrcpy.Server ")
                 append("$SCRCPY_VERSION ")
-                append("scid=0 ")
+                append("scid=$scidArg ")
                 append("log_level=info ")
-                append("tunnel_forward=false ")
-                append("port=$DEFAULT_SCRCPY_PORT ")
+                append("tunnel_forward=true ")
+                append("send_dummy_byte=true ")
                 append("new_display=$displayArg ")
                 append("video_codec=${profile.codec.scrcpyName} ")
                 append("video_bit_rate=$bitRateBps ")
@@ -65,41 +88,61 @@ class ScrcpyServerManager(
                 append("cleanup=true")
             }
         }
+
+        internal fun parseDisplayId(text: String): Int? {
+            for (pattern in DISPLAY_ID_PATTERNS) {
+                val id = pattern.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                if (id != null && id in 1..999) {
+                    return id
+                }
+            }
+            return null
+        }
     }
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverStream: AdbStream? = null
+    private var loopbackBridge: ScrcpyLoopbackBridge? = null
+    private var monitorJob: Job? = null
 
     private val _sessionInfo = MutableStateFlow<ScrcpySessionInfo?>(null)
     val sessionInfo: StateFlow<ScrcpySessionInfo?> = _sessionInfo.asStateFlow()
 
     /**
-     * Checks if scrcpy-server is already deployed and valid, or pushes it from assets.
+     * Checks if scrcpy-server is already deployed and matches [EXPECTED_SERVER_SHA256],
+     * or pushes the SHA-256 verified binary from assets.
      */
     suspend fun ensureServerDeployed(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Read bundled binary bytes from assets (if bundled) or mock fallback
             val assetBytes = try {
                 context.assets.open(SERVER_ASSET_NAME).use { it.readBytes() }
             } catch (e: Exception) {
-                Log.w(TAG, "Asset '$SERVER_ASSET_NAME' not found in bundle, using embedded bootstrap")
+                Log.w(TAG, "Asset '$SERVER_ASSET_NAME' not found in bundle")
                 ByteArray(0)
             }
 
             if (assetBytes.isEmpty()) {
-                // If asset is not yet placed, check if remote binary already exists in /data/local/tmp/
-                val checkOutput = connection.executeShell("ls -la $SERVER_REMOTE_PATH")
-                if (checkOutput.contains("scrcpy-server.jar")) {
-                    Log.i(TAG, "Remote scrcpy-server binary is present on device")
+                val remoteHashOutput = connection.executeShell("sha256sum $SERVER_REMOTE_PATH")
+                if (remoteHashOutput.contains(EXPECTED_SERVER_SHA256, ignoreCase = true)) {
+                    Log.i(TAG, "Remote scrcpy-server checksum matches expected SHA-256")
                     return@withContext true
                 }
-                Log.e(TAG, "No scrcpy-server binary found in assets or /data/local/tmp/")
+                Log.e(TAG, "No verified scrcpy-server binary found in assets or $SERVER_REMOTE_PATH")
                 return@withContext false
             }
 
-            val expectedHash = sha256(assetBytes)
+            val actualAssetHash = sha256(assetBytes)
+            if (!actualAssetHash.equals(EXPECTED_SERVER_SHA256, ignoreCase = true)) {
+                Log.e(
+                    TAG,
+                    "Bundled scrcpy-server SHA-256 mismatch: expected $EXPECTED_SERVER_SHA256, got $actualAssetHash"
+                )
+                return@withContext false
+            }
+
             val remoteHashOutput = connection.executeShell("sha256sum $SERVER_REMOTE_PATH")
-            if (remoteHashOutput.contains(expectedHash, ignoreCase = true)) {
-                Log.i(TAG, "Remote scrcpy-server checksum matches ($expectedHash)")
+            if (remoteHashOutput.contains(EXPECTED_SERVER_SHA256, ignoreCase = true)) {
+                Log.i(TAG, "Remote scrcpy-server checksum matches ($EXPECTED_SERVER_SHA256)")
                 return@withContext true
             }
 
@@ -117,71 +160,137 @@ class ScrcpyServerManager(
     }
 
     /**
-     * Spawns scrcpy-server on device using app_process with virtual display creation.
+     * Spawns scrcpy-server on device using app_process with virtual display creation
+     * and exposes a local loopback TCP bridge backed by ADB `localabstract:scrcpy`.
      */
-    suspend fun startServer(profile: DisplayProfile): ScrcpySessionInfo = withContext(Dispatchers.IO) {
-        val command = buildServerCommand(profile)
+    suspend fun startServer(
+        profile: DisplayProfile,
+        scid: Int = DEFAULT_SCID
+    ): ScrcpySessionInfo = withContext(Dispatchers.IO) {
+        stopServer()
 
-        Log.i(TAG, "Launching scrcpy-server: $command")
-        val stream = connection.openStream("shell:$command")
+        val bridge = ScrcpyLoopbackBridge(
+            connection = connection,
+            socketDestination = socketDestination(scid)
+        )
+        val localPort = bridge.start()
+        loopbackBridge = bridge
+
+        val command = buildServerCommand(profile, scid)
+        Log.i(TAG, "Launching scrcpy-server: $command (bridge=127.0.0.1:$localPort)")
+
+        val stream = try {
+            connection.openStream("shell:$command")
+        } catch (e: Exception) {
+            bridge.close()
+            loopbackBridge = null
+            throw e
+        }
         serverStream = stream
 
-        // Read output asynchronously to detect assigned display_id
-        var detectedDisplayId = 2 // Typical secondary display ID on Galaxy devices
-        val sessionDeferred = kotlinx.coroutines.CompletableDeferred<ScrcpySessionInfo>()
+        val initialInfo = ScrcpySessionInfo(
+            displayId = 2,
+            localPort = localPort,
+            profile = profile
+        )
+        _sessionInfo.value = initialInfo
 
-        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-            try {
-                for (chunk in stream.readChannel) {
-                    val line = String(chunk, Charsets.UTF_8)
-                    Log.d(TAG, "[scrcpy-stdout] $line")
+        monitorJob = scope.launch {
+            monitorServerStdout(stream, localPort, profile)
+        }
 
-                    // Look for patterns like "New display id: 2" or "Display: 2"
-                    val displayMatch = Regex("""(?:display(?:_id)?[:\s=]+)(\d+)""", RegexOption.IGNORE_CASE).find(line)
-                    if (displayMatch != null) {
-                        detectedDisplayId = displayMatch.groupValues[1].toInt()
-                        Log.i(TAG, "Detected DeX Virtual Display ID: $detectedDisplayId")
-                    }
+        return@withContext initialInfo
+    }
 
-                    if (line.contains("Server connected", ignoreCase = true) ||
-                        line.contains("Device: ", ignoreCase = true) ||
-                        line.contains("Listening on", ignoreCase = true)) {
-                        if (!sessionDeferred.isCompleted) {
-                            val info = ScrcpySessionInfo(
-                                displayId = detectedDisplayId,
-                                localPort = DEFAULT_SCRCPY_PORT,
-                                profile = profile
-                            )
-                            _sessionInfo.value = info
-                            sessionDeferred.complete(info)
-                        }
-                    }
+    private suspend fun monitorServerStdout(
+        stream: AdbStream,
+        localPort: Int,
+        profile: DisplayProfile
+    ) {
+        var detectedDisplayId = 2
+        var explicitIdFound = false
+        var appliedFreeformDisplayId: Int? = null
+        val lineBuffer = StringBuilder()
+
+        suspend fun ensureFreeformWindowingMode() {
+            if (!explicitIdFound) {
+                val dumpsysOutput = try {
+                    connection.executeShell("dumpsys display | grep -B 4 -A 4 scrcpy")
+                } catch (_: Exception) {
+                    ""
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Server stream ended: ${e.message}")
+                parseDisplayId(dumpsysOutput)?.let { queriedId ->
+                    detectedDisplayId = queriedId
+                    explicitIdFound = true
+                }
+            }
+
+            val updatedInfo = ScrcpySessionInfo(
+                displayId = detectedDisplayId,
+                localPort = localPort,
+                profile = profile
+            )
+            _sessionInfo.value = updatedInfo
+
+            if (appliedFreeformDisplayId != detectedDisplayId) {
+                appliedFreeformDisplayId = detectedDisplayId
+                try {
+                    connection.executeShell("wm set-display-windowing-mode -d $detectedDisplayId 5")
+                    Log.i(TAG, "Configured freeform windowing mode on display $detectedDisplayId")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to configure freeform windowing mode on display $detectedDisplayId: ${e.message}")
+                }
             }
         }
 
-        // Wait up to 5 seconds for server initialization or return default session
-        val session = kotlinx.coroutines.withTimeoutOrNull(5000) {
-            sessionDeferred.await()
-        } ?: ScrcpySessionInfo(
-            displayId = detectedDisplayId,
-            localPort = DEFAULT_SCRCPY_PORT,
-            profile = profile
-        ).also { _sessionInfo.value = it }
+        try {
+            for (chunk in stream.readChannel) {
+                lineBuffer.append(String(chunk, Charsets.UTF_8))
+                while (true) {
+                    val newlineIndex = lineBuffer.indexOf('\n')
+                    if (newlineIndex < 0) break
+                    val line = lineBuffer.substring(0, newlineIndex).trimEnd('\r')
+                    lineBuffer.delete(0, newlineIndex + 1)
+                    if (line.isBlank()) continue
 
-        return@withContext session
+                    Log.d(TAG, "[scrcpy-stdout] $line")
+                    val parsedId = parseDisplayId(line)
+                    if (parsedId != null) {
+                        detectedDisplayId = parsedId
+                        explicitIdFound = true
+                        Log.i(TAG, "Detected DeX Virtual Display ID: $detectedDisplayId")
+                        _sessionInfo.value = ScrcpySessionInfo(
+                            displayId = detectedDisplayId,
+                            localPort = localPort,
+                            profile = profile
+                        )
+                    }
+
+                    if (parsedId != null || line.contains("New display", ignoreCase = true)) {
+                        ensureFreeformWindowingMode()
+                    }
+                }
+            }
+        } catch (_: CancellationException) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Server stream ended: ${e.message}")
+        }
     }
 
     /**
-     * Terminates the active scrcpy-server process.
+     * Terminates the active scrcpy-server process and its loopback socket bridge.
      */
     fun stopServer() {
+        monitorJob?.cancel()
+        monitorJob = null
         try {
             serverStream?.close()
-        } catch (ignored: Exception) {}
+        } catch (_: Exception) {}
         serverStream = null
+        try {
+            loopbackBridge?.close()
+        } catch (_: Exception) {}
+        loopbackBridge = null
         _sessionInfo.value = null
     }
 

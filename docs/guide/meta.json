@@ -1,0 +1,19 @@
+{
+  "title": "User Guide",
+  "defaultOpen": true,
+  "pages": [
+    "---Get Started---",
+    "index",
+    "installation",
+    "setup-pairing",
+    "---Using LocalDeX---",
+    "display-profiles",
+    "viewer-and-controls",
+    "foldables-and-quick-settings",
+    "troubleshooting",
+    "---Development---",
+    "building-from-source",
+    "deploy-website-cloudflare",
+    "publishing-fdroid-izzyondroid"
+  ]
+}

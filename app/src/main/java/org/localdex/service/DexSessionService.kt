@@ -14,6 +14,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +55,7 @@ class DexSessionService : Service() {
 
     private var adbConnection: AdbConnection? = null
     private var serverManager: ScrcpyServerManager? = null
+    private var sessionInfoJob: Job? = null
 
     companion object {
         private const val TAG = "DexSessionService"
@@ -98,21 +100,26 @@ class DexSessionService : Service() {
     }
 
     private fun startDexSession(connectPort: Int) {
-        if (_sessionState.value is SessionState.Running) return
+        if (_sessionState.value is SessionState.Running || _sessionState.value is SessionState.Starting) return
 
         _sessionState.value = SessionState.Starting
-        startForeground(NOTIFICATION_ID_SESSION, buildSessionNotification(null))
+        val foregroundTypes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(this, NOTIFICATION_ID_SESSION, buildSessionNotification(null), foregroundTypes)
 
         scope.launch {
             try {
                 if (connectPort <= 0) {
-                    _sessionState.value = SessionState.Error("Invalid connect port ($connectPort)")
+                    failAndStop("Invalid connect port ($connectPort)")
                     return@launch
                 }
 
                 val conn = AdbConnection(this@DexSessionService, port = connectPort, useTls = true)
                 if (!conn.connect()) {
-                    _sessionState.value = SessionState.Error("Failed to connect to loopback ADB")
+                    failAndStop("Failed to connect to loopback ADB")
                     return@launch
                 }
                 adbConnection = conn
@@ -121,32 +128,42 @@ class DexSessionService : Service() {
                 serverManager = sm
 
                 if (!sm.ensureServerDeployed()) {
-                    _sessionState.value = SessionState.Error("Failed to deploy scrcpy-server binary")
+                    failAndStop("Failed to deploy scrcpy-server binary")
                     return@launch
                 }
 
                 val info = sm.startServer(activeProfile)
                 _sessionState.value = SessionState.Running(info)
 
-                // Update notification with active details
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                 nm.notify(NOTIFICATION_ID_SESSION, buildSessionNotification(info))
 
-                // Launch viewer activity
-                val viewerIntent = Intent(this@DexSessionService, DexViewerActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                sessionInfoJob?.cancel()
+                sessionInfoJob = scope.launch {
+                    sm.sessionInfo.collect { updated ->
+                        if (updated != null && _sessionState.value is SessionState.Running) {
+                            _sessionState.value = SessionState.Running(updated)
+                            nm.notify(NOTIFICATION_ID_SESSION, buildSessionNotification(updated))
+                        }
+                    }
                 }
-                startActivity(viewerIntent)
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting DeX session", e)
-                _sessionState.value = SessionState.Error(e.message ?: "Unknown error")
-                stopSelf()
+                failAndStop(e.message ?: "Unknown error")
             }
         }
     }
 
+    private fun failAndStop(message: String) {
+        _sessionState.value = SessionState.Error(message)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     fun stopDexSession() {
+        sessionInfoJob?.cancel()
+        sessionInfoJob = null
+
         serverManager?.stopServer()
         serverManager = null
 
@@ -180,7 +197,7 @@ class DexSessionService : Service() {
         }
 
         val builder = NotificationCompat.Builder(this, LocalDeXApp.CHANNEL_SESSION_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_slideshow)
+            .setSmallIcon(R.drawable.ic_dex_notification)
             .setContentTitle(title)
             .setContentText("Tap to open fullscreen viewer")
             .setContentIntent(resumeIntent)

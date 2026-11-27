@@ -23,13 +23,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.localdex.core.scrcpy.control.ControlSocketWriter
+import org.localdex.core.scrcpy.decoder.AudioStreamDecoder
 import org.localdex.core.scrcpy.decoder.VideoStreamDecoder
 import org.localdex.core.scrcpy.input.InputEngine
 import org.localdex.core.scrcpy.input.InputMode
 import org.localdex.core.scrcpy.server.ScrcpyServerManager
+import org.localdex.data.DisplayProfileRepository
 import org.localdex.service.DexSessionService
 import org.localdex.service.SessionState
 import org.localdex.ui.foldable.DevicePosture
@@ -40,9 +43,12 @@ import org.localdex.ui.theme.LocalDeXTheme
 class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     private lateinit var surfaceView: SurfaceView
+    private lateinit var profileRepository: DisplayProfileRepository
     private var videoDecoder: VideoStreamDecoder? = null
+    private var audioDecoder: AudioStreamDecoder? = null
     private var controlWriter: ControlSocketWriter? = null
     private var inputEngine: InputEngine? = null
+    private var streamStartupJob: Job? = null
 
     private val inputModeState = MutableStateFlow(InputMode.TRACKPAD)
     private val isPointerCapturedState = MutableStateFlow(false)
@@ -50,6 +56,13 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        profileRepository = DisplayProfileRepository(this)
+        lifecycleScope.launch {
+            profileRepository.inputModeFlow.collect { savedMode ->
+                inputModeState.value = savedMode
+                inputEngine?.inputMode = savedMode
+            }
+        }
 
         // Keep screen on during DeX workstation use
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -94,6 +107,9 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
                             val nextMode = if (mode == InputMode.TRACKPAD) InputMode.DIRECT_TOUCH else InputMode.TRACKPAD
                             inputModeState.value = nextMode
                             inputEngine?.inputMode = nextMode
+                            lifecycleScope.launch {
+                                profileRepository.saveInputMode(nextMode)
+                            }
                         },
                         onTogglePointerCapture = {
                             if (surfaceView.hasPointerCapture()) {
@@ -191,12 +207,30 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        val currentState = DexSessionService.sessionState.value
-        val profile = DexSessionService.activeProfile
-        val port = ScrcpyServerManager.DEFAULT_SCRCPY_PORT
+        teardownStreams()
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            // Connect control socket
+        val runningInfo = (DexSessionService.sessionState.value as? SessionState.Running)?.sessionInfo
+        val profile = runningInfo?.profile ?: DexSessionService.activeProfile
+        val port = runningInfo?.localPort ?: ScrcpyServerManager.DEFAULT_SCRCPY_PORT
+
+        streamStartupJob = lifecycleScope.launch(Dispatchers.IO) {
+            // scrcpy DesktopConnection.open() accepts video -> (optional audio) -> control sockets
+            // before sending stream headers, so open sockets in strict FIFO order first.
+            val decoder = VideoStreamDecoder(
+                port = port,
+                surface = holder.surface
+            )
+            if (!decoder.connect()) {
+                return@launch
+            }
+            videoDecoder = decoder
+
+            val audio = if (profile.audioEnabled) {
+                AudioStreamDecoder(port = port).takeIf { it.connect() }?.also {
+                    audioDecoder = it
+                }
+            } else null
+
             val writer = ControlSocketWriter(port = port)
             if (writer.connect()) {
                 controlWriter = writer
@@ -208,34 +242,57 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
                 )
             }
 
-            // Connect video decoder
-            val decoder = VideoStreamDecoder(
-                port = port,
-                surface = holder.surface
-            )
-            if (decoder.start()) {
-                videoDecoder = decoder
+            // Now all sockets are accepted and scrcpy-server begins streaming video + audio headers.
+            launch {
+                if (!decoder.startStreaming()) {
+                    decoder.close()
+                }
+            }
+            if (audio != null) {
+                launch {
+                    if (!audio.startStreaming()) {
+                        audio.close()
+                    }
+                }
             }
         }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        // Handle orientation or surface dimension changes
+        val runningInfo = (DexSessionService.sessionState.value as? SessionState.Running)?.sessionInfo
+        val profile = runningInfo?.profile ?: DexSessionService.activeProfile
+        inputEngine?.updateDisplayDimensions(profile.width, profile.height)
+        hideSystemBars()
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        teardownStreams()
+    }
+
+    private fun teardownStreams() {
+        streamStartupJob?.cancel()
+        streamStartupJob = null
         videoDecoder?.close()
         videoDecoder = null
+        audioDecoder?.close()
+        audioDecoder = null
         controlWriter?.close()
         controlWriter = null
         inputEngine = null
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (inputEngine?.onKeyEvent(event) == true) {
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode != KeyEvent.KEYCODE_BACK && inputEngine?.onKeyEvent(event) == true) {
             return true
         }
-        return super.dispatchKeyEvent(event)
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode != KeyEvent.KEYCODE_BACK && inputEngine?.onKeyEvent(event) == true) {
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     private fun toggleSoftKeyboard() {

@@ -1,103 +1,99 @@
-# PENDING.md: LocalDeX Roadmap & Current Progress
+# PENDING.md: LocalDeX Engineering Backlog & Execution Plan
 
-This document tracks completed milestones, active work, and pending features for **LocalDeX**.
-
-> [!NOTE]
-> **Release v1.0.0 Published:** Successfully built and published to GitHub Releases (`v1.0.0`) with universal release APK (`LocalDeX-v1.0.0-universal.apk`). All core features, foldable awareness, input engines, and FOSS packaging are complete and validated.
+This document tracks **everything remaining to make LocalDeX production-ready end-to-end on physical Samsung Galaxy hardware**, along with code fixes, test coverage, website/docs polish, CI improvements, and FOSS store submission steps.
 
 ---
 
-## 1. Current Progress Snapshot
+## 1. Critical Runtime & Protocol Blockers
 
-### Completed Milestones
+These gaps were identified directly in the codebase and must be resolved before end-to-end pairing, streaming, and desktop interaction will work reliably on real devices.
 
-- [x] **Project Scaffolding & Build System**
-  - Gradle multi-module architecture (`:app`, `:core:adb`, `:core:scrcpy`).
-  - Version Catalog (`gradle/libs.versions.toml`) configured for Kotlin 2.1.0, AGP 8.8.0, and Android 16 (`compileSdk = 36`).
-  - Official Gradle 8.11.1 wrapper, `gradle.properties`, and Android 16 toolchain configured.
-  - GitHub Actions CI workflow (`.github/workflows/build-apk.yml`) triggered on `release: vX.Y.Z` commits to `main` with automated release tagging and universal APK uploads.
-  - Dependabot automated dependency bumps for Gradle and GitHub Actions (`.github/dependabot.yml`).
-  - FOSS GPL-3.0 licensing, clean `.gitignore`, and contributor/agent guide (`AGENTS.md`).
+### 1.1 Implement Real Android 11+ SPAKE2+ Wireless Debugging Pairing (`:core:adb`) — ✅ Implemented (Unit-Tested; Hardware Validation in 4.1)
+- **Completed:**
+  - [x] Enabled Conscrypt TLS 1.3 on the pairing `SSLSocket` and exported 64-byte keying material (`Conscrypt.exportKeyingMaterial(sslSocket, "adb-label\u0000", null, 64)`).
+  - [x] Implemented pure-Kotlin BoringSSL-compatible SPAKE2+ over Edwards25519 (`Spake25519.kt`) and AOSP `PairingAuth.kt` / `PairingPacket.kt` (HKDF-SHA256 + sequenced 12-byte-nonce AES-128-GCM `PeerInfo` exchange carrying `adbCrypto.getAdbPublicKeyString()`).
+  - [x] Verified against local TLS 1.3 mock pairing server tests (`Spake25519Test.kt`, `AdbPairingClientTest.kt`).
 
-- [x] **Core ADB Loopback Engine (`:core:adb`)**
-  - Pure-Kotlin RSA-2048 keypair generation and self-signed X.509 certificate creation (`AdbCrypto.kt`).
-  - mDNS Wireless Debugging discovery for `_adb-tls-pairing._tcp` and `_adb-tls-connect._tcp` (`AdbDiscoveryManager.kt`).
-  - TLS 1.3 SPAKE2+ 6-digit PIN pairing client (`AdbPairingClient.kt`).
-  - Multiplexed 24-byte packet framing and streams (`AdbConnection.kt`, `AdbStream.kt`, `AdbMessage.kt`).
-  - ADB file push sync protocol (`pushFile`) for binary deployment.
-  - Self-healing `WRITE_SECURE_SETTINGS` automation and `adb_wifi_enabled = 1` toggle (`AdbPermissionManager.kt`).
-  - One UI desktop flags and freeform window controls (`setFreeformSupport`, `setForceResizableActivities`, `setDesktopModeDebug`).
-  - Unit tests for message serialization, checksums, and permission manager commands (`AdbMessageTest.kt`, `AdbPermissionManagerTest.kt`).
+### 1.2 Align `scrcpy-server` Socket Transport & Connection Order (`:core:scrcpy`, `:core:adb`, `:app`) — ✅ Implemented
+- **Completed:**
+  - [x] Updated `ScrcpyServerManager.buildServerCommand()` to pass `scid`, `tunnel_forward=true`, `send_dummy_byte=true` (removing invalid `port=27183`) and added `ScrcpyServerManager.socketDestination()`.
+  - [x] Added `ScrcpyLoopbackBridge.kt` listening on an ephemeral `127.0.0.1` TCP port and forwarding bidirectionally in FIFO accept order to `AdbConnection.openStream("localabstract:scrcpy...")` (`ScrcpyLoopbackBridgeTest.kt`).
+  - [x] Fixed `AdbConnection` to fail pending `openStream()` calls immediately on `A_CLSE` rejection and always clean up sockets in `close()` (`AdbConnectionTest.kt`).
+  - [x] Updated `VideoStreamDecoder` to split `connect()` (dummy byte consumption) from `startStreaming()`, fixed resource cleanup on startup failure, and updated `DexViewerActivity.surfaceCreated()` to open Video -> Audio (if enabled) -> Control sockets in strict `DesktopConnection.open()` order before decoding headers concurrently (`VideoStreamDecoderTest.kt`).
+  - [x] Enforced `EXPECTED_SERVER_SHA256` verification in `ScrcpyServerManager.ensureServerDeployed()` (`ScrcpyServerManagerTest.kt`).
 
-- [x] **Core Scrcpy Engine (`:core:scrcpy`)**
-  - Bundled official `scrcpy-server` v3.1 JAR (`app/src/main/assets/scrcpy-server`) with runtime SHA-256 validation.
-  - Process spawner and virtual display launcher via loopback `app_process` (`ScrcpyServerManager.kt`).
-  - Audio stream options (`audioEnabled`, `audioCodec`: Opus, AAC, RAW) integrated into server command spawner.
-  - Low-latency `MediaCodec` H.264/H.265 video decoder rendering directly to a `Surface` (`VideoStreamDecoder.kt`).
-  - Binary control socket writer (`ControlSocketWriter.kt`, `ControlMessage.kt`).
-  - Multi-mode desktop input engine: Virtual Trackpad mode, Direct Touch mode, S-Pen stylus precision routing with 4096-level pressure, and hardware mouse pass-through (`InputEngine.kt`).
-  - Relative mouse coordinate accumulation for Android Pointer Capture.
-  - Gamepad & joystick controller mapping: analog cursor navigation, right-stick scrolling, D-pad hat mapping, and button A click injection.
-  - Display profile repository and logical dp viewport calculator (`DisplayProfile.kt`, `DisplayProfileRepository.kt`).
-  - Unit tests for control packets, display profile math, server commands, and input engine (`ControlMessageTest.kt`, `DisplayProfileTest.kt`, `ScrcpyServerManagerTest.kt`, `InputEngineTest.kt`).
+### 1.3 Fix `ControlMessage.Scroll` Wire Encoding (`:core:scrcpy`) — ✅ Implemented
+- **Completed:**
+  - [x] Updated `ControlMessage.Scroll.toByteArray()` to write a `21`-byte `ByteBuffer` with 16-bit signed fixed-point `hScroll` / `vScroll` clamped to `[-1f, 1f]`.
+  - [x] Added serialization and clamping unit tests in `ControlMessageTest.kt`.
 
-- [x] **Foldable Hinge & Posture Awareness (`:app`, `:core:scrcpy`)**
-  - Jetpack `androidx.window:window` `WindowInfoTracker` integration (`FoldablePostureTracker.kt`).
-  - Automatic detection of `NORMAL`, `TABLETOP`, `BOOK`, and `UNFOLDED` hinge postures.
-  - Galaxy Z Fold display presets: Cover screen (`2316x904/380`) and Inner screen (`2176x1812/360`).
-  - Tabletop Flex Mode layout adaptation in `DexViewerActivity.kt`.
-  - Foldable posture recommendation banner on `HomeScreen.kt`.
-  - Unit tests in `FoldablePostureTrackerTest.kt`.
+### 1.4 Enforce Freeform Windowing & Display ID Detection on Launch (`:core:adb`, `:core:scrcpy`, `:app`) — ✅ Implemented
+- **Completed:**
+  - [x] Improved `ScrcpyServerManager.monitorServerStdout()` display ID parsing (avoiding false matches against `WIDTHxHEIGHT`) with `dumpsys display` fallback and live `DexSessionService` state/notification updates.
+  - [x] Executed `wm set-display-windowing-mode -d <displayId> 5` (`WINDOWING_MODE_FREEFORM`) automatically once the virtual display is created (`ScrcpyServerManagerTest.kt`).
+  - [x] Wired `AdbPermissionManager.setFreeformSupport`, `setForceResizableActivities`, and `setDesktopModeDebug` into `SetupWizardSheet` / `MainActivity` off the main thread (`Dispatchers.IO`) with `SecurityException` guards and post-write state refreshes.
 
-- [x] **Session Service & System Integration (`:app`)**
-  - Persistent foreground service maintaining virtual display and wake-locks (`DexSessionService.kt`).
-  - Notification `RemoteInput` receiver for entering pairing PINs directly from Android quick settings / notifications (`PairingReplyReceiver.kt`).
-  - Android Quick Settings tile service for quick start/stop (`DexTileService.kt`).
-
-- [x] **Material 3 Expressive UI & Customization (`:app`)**
-  - Dynamic Color theme with OLED dark surfaces and DeX Cobalt fallback (`#3B66F5`).
-  - Hero Status Card and one-tap launch FAB (`HomeScreen.kt`).
-  - 4-step guided onboarding bottom sheet with One UI Desktop Enhancements toggles (`SetupWizardSheet.kt`).
-  - Display profile editor with live aspect ratio wireframe preview and audio forwarding toggles (`ProfileEditorSheet.kt`).
-  - Fullscreen immersive viewer activity with pointer capture locking, S-Pen air hover support, and IME soft keyboard tracking (`DexViewerActivity.kt`).
-  - Draggable translucent floating pill toolbar with mouse lock toggle and two-way soft keyboard show/hide toggle (`SessionPillToolbar.kt`).
-  - System Back gesture forwarding to Samsung DeX Display ID `N` (with pointer release handling).
-
-- [x] **FOSS Packaging & Metadata**
-  - Fastlane Triple-T metadata layout under `fastlane/metadata/android/en-US/` (`title.txt`, `short_description.txt`, `full_description.txt`, `changelogs/1.txt`).
-  - Official F-Droid metadata build recipe template (`metadata/org.localdex.yml`).
-  - Zero proprietary GMS / Firebase dependencies (F-Droid and IzzyOnDroid compliant).
-
-- [x] **Compilation & Artifact Verification**
-  - `./gradlew test --stacktrace`: 100% test pass rate across all modules.
-  - `./gradlew assembleDebug`: Verified universal debug APK (`LocalDeX-v1.0.0-debug-universal.apk`, 73 MB).
-  - `./gradlew assembleRelease`: Verified universal release APK with R8 / ProGuard shrinking and baseline profiles (`LocalDeX-v1.0.0-universal.apk`, 13 MB).
+### 1.5 Implement Loopback Audio Stream Consumer (`:core:scrcpy`, `:app`) — ✅ Implemented
+- **Completed:**
+  - [x] Created `AudioStreamDecoder` in `:core:scrcpy` reading the 4-byte scrcpy audio codec ID (`OPUS`, `AAC`, `FLAC`, `RAW`, plus disabled/error handling), decoding compressed streams via `MediaCodec` and writing low-latency PCM (48 kHz stereo) to `AudioTrack` (`AudioStreamDecoderTest.kt`).
+  - [x] Wired `AudioStreamDecoder` connect/stream/teardown lifecycle cleanly into `DexViewerActivity` whenever `activeProfile.audioEnabled == true`.
 
 ---
 
-## 2. Active & Pending Roadmap
+## 2. Input Engine, Lifecycle & UI Fixes
 
-### Phase 1: On-Device Hardware Verification (Ready for Testing)
-- [ ] **Samsung Galaxy Device Matrix Testing**
-  - Test loopback pairing against physical Galaxy devices across One UI 6 (Android 14), One UI 7 (Android 15), and One UI 8 (Android 16).
-  - Test flagship series (S21, S22, S23, S24, S25), Note series (Note 20), and Fold series (Z Fold 3/4/5/6).
-  - Verify Samsung One UI detects `--new-display` virtual display and launches Samsung DeX on Display ID `N`.
-  - Benchmark hardware `MediaCodec` decode latency (`KEY_LOW_LATENCY = 1`) on Snapdragon vs Exynos chipsets.
+### 2.1 Complete Trackpad Gestures & Button Metadata (`:core:scrcpy`) — ✅ Implemented
+- **Completed:**
+  - [x] Added double-tap-and-hold drag transition (`isDragging = true`, `BUTTON_PRIMARY` press/move/release) and multi-finger tap suppression in `InputEngine.handleTrackpadTouch()`.
+  - [x] Enabled simultaneous two-finger horizontal (`hScroll`) and vertical (`vScroll`) scroll deltas on swipe.
+  - [x] Populated `ControlMessage.Touch.actionButton` across trackpad clicks, stylus presses/releases, hardware mouse buttons, and gamepad Button A (`InputEngineTest.kt`).
 
-### Phase 2: FOSS Distribution & Upstream Indexing
-- [x] **F-Droid Build Recipe Template**
-  - Prepared `metadata/org.localdex.yml` build recipe for F-Droid official repository inclusion.
-- [ ] **F-Droid Official Merge Request**
-  - Verify reproducible build compliance using F-Droid Docker container and submit merge request to `fdroiddata`.
-- [ ] **IzzyOnDroid Submission**
-  - Submit repository to IzzyOnDroid directory for automated tag tracking (`release: v*`).
+### 2.2 Harden `PairingReplyReceiver`, `DexSessionService` & Port Discovery (`:app`) — ✅ Implemented
+- **Completed:**
+  - [x] Wrapped `PairingReplyReceiver.onReceive()` in `goAsync()` with `pendingResult.finish()` inside `finally`.
+  - [x] Guarded `SessionState.Starting` duplicate starts in `DexSessionService`, switched to `ServiceCompat.startForeground(...)` with explicit `connectedDevice | specialUse` types on API 34+, cleaned up foreground state on startup failures, and moved `DexViewerActivity` launch to `MainActivity` observing `SessionState.Running` via `LaunchedEffect` (plus `ContextCompat.startForegroundService`).
+  - [x] Replaced the hardcoded `5555` port fallback in `MainActivity` with resolved mDNS `connectEndpoint?.port` lookup (3s discovery wait + Toast/Setup Wizard fallback if unavailable).
 
-### Phase 3: Ergonomic & Power-User Enhancements
-- [x] **S-Pen & Stylus Pass-Through**
-  - Direct precision touch routing, 4096-level pressure forwarding, S-Pen button secondary action, and hover motion tracking.
-- [x] **Pointer Capture & Mouse Lock**
-  - Android pointer capture API (`requestPointerCapture`) integration in `DexViewerActivity` and toggle button in `SessionPillToolbar`.
-- [x] **Custom Desktop IME / Soft Keyboard Management**
-  - Two-way soft keyboard show/hide toggle in `SessionPillToolbar` and WindowInsets IME height tracking to prevent UI occlusion.
-- [x] **Hardware Gamepad & Controller Mapping**
-  - Analog joystick cursor gliding (`AXIS_X`, `AXIS_Y`), right-stick smooth scrolling (`AXIS_Z`, `AXIS_RZ`), D-pad hat mapping (`AXIS_HAT_X`, `AXIS_HAT_Y`), and button A click injection.
+### 2.3 Fix Home/Viewer UI State Gaps, Icons & Dead Code (`:app`) — ✅ Implemented
+- **Completed:**
+  - [x] Added dedicated `SessionState.Error` UI rendering and setup/retry trigger in `HomeScreen.HeroStatusCard`.
+  - [x] Added a `LifecycleEventObserver` (`ON_RESUME`) in `MainActivity` to refresh notification permission, Developer Options, Wireless Debugging, `WRITE_SECURE_SETTINGS`, and desktop flag toggles cleanly.
+  - [x] Exposed saved custom profiles in `DisplayProfileRepository.customProfileFlow` and included them in `HomeScreen`'s `allProfiles` list.
+  - [x] Persisted `InputMode` across viewer sessions via `DisplayProfileRepository.inputModeFlow` / `saveInputMode` and implemented `DexViewerActivity.surfaceChanged()` to sync dimensions and keep immersive system bars hidden.
+  - [x] Removed unused `Navigation.kt` and added custom adaptive vector launcher icons (`mipmap-anydpi-v26/ic_launcher*.xml`) plus monochrome `@drawable/ic_dex_notification`.
+
+---
+
+## 3. Testing, CI/CD & Documentation Sync
+
+### 3.1 Expand Automated Test Suite (`:core:adb`, `:core:scrcpy`, `:app`) — ✅ Implemented
+- **Completed:**
+  - [x] Added loopback socket / mock stream tests across `:core:adb` and `:core:scrcpy`: `Spake25519Test`, `AdbPairingClientTest`, `AdbConnectionTest`, `ScrcpyLoopbackBridgeTest`, `ScrcpyServerManagerTest`, `VideoStreamDecoderTest`, `AudioStreamDecoderTest`, `ControlSocketWriterTest`, and `InputEngineTest`.
+  - [x] Added `:app` tests for `DisplayProfileRepository` (`PreferenceDataStoreFactory` serialization) and Compose UI state rendering (`HeroStatusCardTest` and `SetupWizardSheetTest` with Robolectric).
+
+### 3.2 Add Continuous Integration for PRs & Website (`/.github/workflows/`) — ✅ Implemented
+- **Completed:**
+  - [x] Added `.github/workflows/ci.yml` running `./gradlew test --stacktrace` + `./gradlew lintDebug --stacktrace` and `website/` `pnpm install --frozen-lockfile && pnpm sync:docs:check && pnpm types:check && pnpm build` on every `push` to `main` and `pull_request`.
+
+### 3.3 Website Assets & Docs Synchronization (`website/`, `docs/`) — 🚧 Partially Completed
+- **Completed:**
+  - [x] Added `website/scripts/sync-docs.mjs` (`sync:docs`, `sync:docs:check`, `prebuild`) keeping `docs/guide/` + `docs/TECHNICAL.md` synchronized into `website/content/docs/` while skipping cleanly on standalone `website/` builds where `../docs` is absent, enforced via CI.
+- **Remaining:**
+  - [ ] Replace the hero placeholder in `website/app/(home)/page.tsx` with a `1280 × 1150 px` screenshot/graphic saved at `website/public/hero.png`.
+
+---
+
+## 4. Physical Device Validation & FOSS Distribution
+
+### 4.1 Samsung Galaxy Hardware Verification Matrix
+- **Plan / Approach:**
+  1. Test on physical Samsung Galaxy devices across **One UI 6 (Android 14)**, **One UI 7 (Android 15)**, and **One UI 8+ (Android 16)**:
+     - **Galaxy S Series (S21–S25):** Verify virtual display DeX launch, `WINDOWING_MODE_FREEFORM`, H.264/H.265 `MediaCodec` (`KEY_LOW_LATENCY = 1`) latency on Snapdragon vs. Exynos, and `WRITE_SECURE_SETTINGS` reboot persistence.
+     - **Galaxy Z Fold Series (Z Fold 3–6):** Verify `FoldablePostureTracker` Cover/Inner banner switching and `TABLETOP` Flex Mode layout above `hingeBounds.top`.
+     - **Galaxy Note / S Ultra / Tab S:** Verify S-Pen 4096-level pressure, air hover, eraser/side button right-click, USB/BT mouse Pointer Capture, and gamepad navigation.
+     - **Galaxy Z Flip & Non-DeX Devices:** Verify AOSP Freeform Desktop fallback via `force_desktop_mode_on_external_displays`.
+
+### 4.2 F-Droid & IzzyOnDroid Store Inclusion
+- **Plan / Approach:**
+  1. Run F-Droid's `fdroid build` / reproducible-build verification container locally against `metadata/org.localdex.yml` and `fastlane/metadata/android/en-US/`.
+  2. Submit merge request to upstream `fdroiddata` and register releases (`v*` tags) with IzzyOnDroid.

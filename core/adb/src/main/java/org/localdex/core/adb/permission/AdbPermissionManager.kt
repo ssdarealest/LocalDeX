@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.localdex.core.adb.connection.AdbConnection
 
 /**
@@ -138,60 +140,76 @@ object AdbPermissionManager {
         }
     }
 
-    /**
-     * Enables or disables One UI freeform window support.
-     */
-    suspend fun setFreeformSupport(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean {
+    private suspend fun writeGlobalIntSetting(
+        context: Context,
+        connection: AdbConnection?,
+        settingKey: String,
+        enabled: Boolean
+    ): Boolean = withContext(Dispatchers.IO) {
         val intVal = if (enabled) 1 else 0
         var success = false
         if (hasSecureSettingsPermission(context)) {
             try {
-                success = Settings.Global.putInt(context.contentResolver, SETTING_ENABLE_FREEFORM_SUPPORT, intVal)
+                success = Settings.Global.putInt(context.contentResolver, settingKey, intVal)
+            } catch (e: SecurityException) {
+                Log.w(TAG, "SecurityException updating $settingKey via ContentResolver", e)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to update freeform setting via content resolver", e)
+                Log.w(TAG, "Failed to update $settingKey via ContentResolver", e)
             }
         }
         if (connection != null) {
             try {
-                connection.executeShell("settings put global $SETTING_ENABLE_FREEFORM_SUPPORT $intVal")
+                connection.executeShell("settings put global $settingKey $intVal")
                 success = true
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to update freeform setting via ADB", e)
+                Log.w(TAG, "Failed to update $settingKey via ADB", e)
             }
         }
-        return success
+        success
     }
+
+    /**
+     * Enables or disables One UI freeform window support.
+     */
+    suspend fun setFreeformSupport(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean =
+        writeGlobalIntSetting(context, connection, SETTING_ENABLE_FREEFORM_SUPPORT, enabled)
 
     /**
      * Enables or disables force resizable activities.
      */
-    suspend fun setForceResizableActivities(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean {
-        val intVal = if (enabled) 1 else 0
-        var success = false
-        if (hasSecureSettingsPermission(context)) {
-            try {
-                success = Settings.Global.putInt(context.contentResolver, SETTING_FORCE_RESIZABLE_ACTIVITIES, intVal)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to update resizable setting via content resolver", e)
+    suspend fun setForceResizableActivities(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean =
+        writeGlobalIntSetting(context, connection, SETTING_FORCE_RESIZABLE_ACTIVITIES, enabled)
+
+    /**
+     * Sets desktop mode debug flags via ContentResolver (when WRITE_SECURE_SETTINGS is held)
+     * and optionally loopback ADB shell (`setprop` + `settings put global`).
+     */
+    suspend fun setDesktopModeDebug(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean =
+        withContext(Dispatchers.IO) {
+            var success = writeGlobalIntSetting(
+                context = context,
+                connection = connection,
+                settingKey = SETTING_FORCE_DESKTOP_MODE_ON_EXTERNAL,
+                enabled = enabled
+            )
+            if (connection != null) {
+                val intVal = if (enabled) 1 else 0
+                try {
+                    connection.executeShell("setprop persist.wm.debug.desktop_mode $intVal")
+                    success = true
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to set persist.wm.debug.desktop_mode via ADB", e)
+                }
             }
+            success
         }
-        if (connection != null) {
-            try {
-                connection.executeShell("settings put global $SETTING_FORCE_RESIZABLE_ACTIVITIES $intVal")
-                success = true
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to update resizable setting via ADB", e)
-            }
-        }
-        return success
-    }
 
     /**
      * Sets desktop mode debug system property and global flag.
      */
-    suspend fun setDesktopModeDebug(connection: AdbConnection, enabled: Boolean): Boolean {
+    suspend fun setDesktopModeDebug(connection: AdbConnection, enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
         val intVal = if (enabled) 1 else 0
-        return try {
+        return@withContext try {
             connection.executeShell("setprop persist.wm.debug.desktop_mode $intVal")
             connection.executeShell("settings put global $SETTING_FORCE_DESKTOP_MODE_ON_EXTERNAL $intVal")
             true

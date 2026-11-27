@@ -22,7 +22,8 @@ class InputEngine(
     private val writer: ControlSocketWriter,
     var displayWidth: Int,
     var displayHeight: Int,
-    var inputMode: InputMode = InputMode.TRACKPAD
+    var inputMode: InputMode = InputMode.TRACKPAD,
+    private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) {
     // Current virtual cursor coordinates (for Trackpad & Relative Mouse mode)
     var cursorX = displayWidth / 2f
@@ -34,10 +35,13 @@ class InputEngine(
     private var lastTouchX = 0f
     private var lastTouchY = 0f
     private var isDragging = false
+    private var suppressNextTapUp = false
     private var touchDownTime = 0L
+    private var lastTapUpTime = 0L
 
     companion object {
         private const val TAP_THRESHOLD_MS = 200L
+        private const val DOUBLE_TAP_GAP_MS = 300L
         private const val TRACKPAD_SENSITIVITY = 1.35f
         private const val JOYSTICK_DEADZONE = 0.15f
         private const val JOYSTICK_CURSOR_SPEED = 24.0f
@@ -229,11 +233,18 @@ class InputEngine(
         val isButtonPressed = (event.buttonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
                 (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0
 
-        val buttons = when {
-            isEraser || isButtonPressed -> ControlMessage.BUTTON_SECONDARY
-            action != ControlMessage.ACTION_UP && event.actionMasked != MotionEvent.ACTION_HOVER_MOVE -> ControlMessage.BUTTON_PRIMARY
-            else -> 0
+        val activeButton = if (isEraser || isButtonPressed) {
+            ControlMessage.BUTTON_SECONDARY
+        } else {
+            ControlMessage.BUTTON_PRIMARY
         }
+        val isHover = event.actionMasked == MotionEvent.ACTION_HOVER_MOVE
+        val actionButton = if (action == ControlMessage.ACTION_DOWN || action == ControlMessage.ACTION_UP) {
+            activeButton
+        } else {
+            0
+        }
+        val buttons = if (action == ControlMessage.ACTION_UP || isHover) 0 else activeButton
 
         writer.send(
             ControlMessage.Touch(
@@ -244,6 +255,7 @@ class InputEngine(
                 displayWidth = displayWidth,
                 displayHeight = displayHeight,
                 pressure = pressure,
+                actionButton = actionButton,
                 buttons = buttons
             )
         )
@@ -251,12 +263,38 @@ class InputEngine(
     }
 
     private fun handleTrackpadTouch(event: MotionEvent): Boolean {
+        val now = timeProvider()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                touchDownTime = System.currentTimeMillis()
+                touchDownTime = now
                 lastTouchX = event.x
                 lastTouchY = event.y
-                isDragging = false
+                suppressNextTapUp = false
+
+                if (now - lastTapUpTime <= DOUBLE_TAP_GAP_MS) {
+                    isDragging = true
+                    lastTapUpTime = 0L
+                    writer.send(
+                        ControlMessage.Touch(
+                            action = ControlMessage.ACTION_DOWN,
+                            pointerId = 0,
+                            x = cursorX.roundToInt(),
+                            y = cursorY.roundToInt(),
+                            displayWidth = displayWidth,
+                            displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_PRIMARY,
+                            buttons = ControlMessage.BUTTON_PRIMARY
+                        )
+                    )
+                } else {
+                    isDragging = false
+                }
+            }
+
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                suppressNextTapUp = true
+                lastTouchX = event.getX(0)
+                lastTouchY = event.getY(0)
             }
 
             MotionEvent.ACTION_MOVE -> {
@@ -284,28 +322,46 @@ class InputEngine(
                         )
                     }
                 } else if (pointerCount == 2) {
-                    // Two-finger scroll
-                    val dy = (event.getY(0) - lastTouchY) / 10f
+                    // Two-finger horizontal + vertical scroll
+                    suppressNextTapUp = true
+                    val hScroll = (event.getX(0) - lastTouchX) / 10f
+                    val vScroll = (event.getY(0) - lastTouchY) / 10f
                     writer.send(
                         ControlMessage.Scroll(
                             x = cursorX.roundToInt(),
                             y = cursorY.roundToInt(),
                             displayWidth = displayWidth,
                             displayHeight = displayHeight,
-                            hScroll = 0f,
-                            vScroll = dy
+                            hScroll = hScroll,
+                            vScroll = vScroll
                         )
                     )
+                    lastTouchX = event.getX(0)
                     lastTouchY = event.getY(0)
                 }
             }
 
             MotionEvent.ACTION_UP -> {
-                val duration = System.currentTimeMillis() - touchDownTime
-                if (duration < TAP_THRESHOLD_MS) {
+                if (isDragging) {
+                    isDragging = false
+                    lastTapUpTime = 0L
+                    writer.send(
+                        ControlMessage.Touch(
+                            action = ControlMessage.ACTION_UP,
+                            pointerId = 0,
+                            x = cursorX.roundToInt(),
+                            y = cursorY.roundToInt(),
+                            displayWidth = displayWidth,
+                            displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_PRIMARY,
+                            buttons = 0
+                        )
+                    )
+                } else if (!suppressNextTapUp && now - touchDownTime < TAP_THRESHOLD_MS) {
                     // Tap = Left click
                     val x = cursorX.roundToInt()
                     val y = cursorY.roundToInt()
+                    lastTapUpTime = now
                     writer.send(
                         ControlMessage.Touch(
                             action = ControlMessage.ACTION_DOWN,
@@ -314,6 +370,7 @@ class InputEngine(
                             y = y,
                             displayWidth = displayWidth,
                             displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_PRIMARY,
                             buttons = ControlMessage.BUTTON_PRIMARY
                         )
                     )
@@ -324,10 +381,16 @@ class InputEngine(
                             x = x,
                             y = y,
                             displayWidth = displayWidth,
-                            displayHeight = displayHeight
+                            displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_PRIMARY,
+                            buttons = 0
                         )
                     )
-                } else if (isDragging) {
+                }
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                if (isDragging) {
                     isDragging = false
                     writer.send(
                         ControlMessage.Touch(
@@ -336,7 +399,9 @@ class InputEngine(
                             x = cursorX.roundToInt(),
                             y = cursorY.roundToInt(),
                             displayWidth = displayWidth,
-                            displayHeight = displayHeight
+                            displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_PRIMARY,
+                            buttons = 0
                         )
                     )
                 }
@@ -344,7 +409,7 @@ class InputEngine(
 
             MotionEvent.ACTION_POINTER_UP -> {
                 // Two finger tap = Right click
-                if (event.pointerCount == 2 && System.currentTimeMillis() - touchDownTime < TAP_THRESHOLD_MS) {
+                if (event.pointerCount == 2 && now - touchDownTime < TAP_THRESHOLD_MS) {
                     val x = cursorX.roundToInt()
                     val y = cursorY.roundToInt()
                     writer.send(
@@ -355,6 +420,7 @@ class InputEngine(
                             y = y,
                             displayWidth = displayWidth,
                             displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_SECONDARY,
                             buttons = ControlMessage.BUTTON_SECONDARY
                         )
                     )
@@ -365,7 +431,9 @@ class InputEngine(
                             x = x,
                             y = y,
                             displayWidth = displayWidth,
-                            displayHeight = displayHeight
+                            displayHeight = displayHeight,
+                            actionButton = ControlMessage.BUTTON_SECONDARY,
+                            buttons = 0
                         )
                     )
                 }
@@ -422,10 +490,21 @@ class InputEngine(
             else -> return false
         }
 
-        val buttons = when {
-            (event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0 -> ControlMessage.BUTTON_PRIMARY
-            (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0 -> ControlMessage.BUTTON_SECONDARY
-            (event.buttonState and MotionEvent.BUTTON_TERTIARY) != 0 -> ControlMessage.BUTTON_TERTIARY
+        var buttons = 0
+        if ((event.buttonState and MotionEvent.BUTTON_PRIMARY) != 0) {
+            buttons = buttons or ControlMessage.BUTTON_PRIMARY
+        }
+        if ((event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0) {
+            buttons = buttons or ControlMessage.BUTTON_SECONDARY
+        }
+        if ((event.buttonState and MotionEvent.BUTTON_TERTIARY) != 0) {
+            buttons = buttons or ControlMessage.BUTTON_TERTIARY
+        }
+
+        val mappedActionButton = mapMouseButton(event.actionButton)
+        val actionButton = when (action) {
+            ControlMessage.ACTION_DOWN -> if (mappedActionButton != 0) mappedActionButton else buttons
+            ControlMessage.ACTION_UP -> if (mappedActionButton != 0) mappedActionButton else ControlMessage.BUTTON_PRIMARY
             else -> 0
         }
 
@@ -437,10 +516,18 @@ class InputEngine(
                 y = y,
                 displayWidth = displayWidth,
                 displayHeight = displayHeight,
+                actionButton = actionButton,
                 buttons = buttons
             )
         )
         return true
+    }
+
+    private fun mapMouseButton(androidButton: Int): Int = when (androidButton) {
+        MotionEvent.BUTTON_PRIMARY -> ControlMessage.BUTTON_PRIMARY
+        MotionEvent.BUTTON_SECONDARY -> ControlMessage.BUTTON_SECONDARY
+        MotionEvent.BUTTON_TERTIARY -> ControlMessage.BUTTON_TERTIARY
+        else -> 0
     }
 
     /**
@@ -459,6 +546,7 @@ class InputEngine(
                     y = cursorY.roundToInt(),
                     displayWidth = displayWidth,
                     displayHeight = displayHeight,
+                    actionButton = ControlMessage.BUTTON_PRIMARY,
                     buttons = buttons
                 )
             )
