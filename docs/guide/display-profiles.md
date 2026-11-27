@@ -53,4 +53,4 @@ A live wireframe box renders your aspect ratio (`width / height`, clamped visual
 - **Off by default (`audio=false`):** Because Samsung DeX runs directly on your device, your phone or tablet speakers already play DeX audio natively with zero latency or compression overhead.
 - **Optional Loopback Audio (`audio=true`):** Enable **Audio Forwarding** in the Profile Editor if you specifically want `scrcpy-server` to stream audio over loopback using **`OPUS`**, **`AAC`**, or **`RAW`** encoding.
 
-Tap **Save and Apply Profile** to store your custom settings as the active profile (`custom`).
+Tap **Save and Apply Profile** to store your custom settings as `custom` and make it selectable inside the **Display Presets** list alongside built-in presets.

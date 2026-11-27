@@ -20,7 +20,7 @@ Normally, Samsung DeX on Galaxy smartphones requires plugging into an external H
 
 1. **Loopback Pairing (One-Time):** LocalDeX discovers your device's Wireless Debugging mDNS service (`_adb-tls-pairing._tcp.`), pairs over TLS 1.3 using the 6-digit pairing code, and grants itself `WRITE_SECURE_SETTINGS`.
 2. **Self-Healing Reconnect:** Whenever LocalDeX resumes (`MainActivity.onResume`), it automatically re-enables Wireless Debugging (`adb_wifi_enabled = 1`) if Android turned it off after a reboot or Wi-Fi network change.
-3. **Virtual Display Launch:** LocalDeX verifies and pushes `scrcpy-server` v3.1 to `/data/local/tmp/scrcpy-server.jar`, launches it via `app_process` with `new_display=<width>x<height>/<dpi>`, and binds loopback sockets on port `27183`.
+3. **Virtual Display Launch:** LocalDeX verifies and pushes `scrcpy-server` v3.1 to `/data/local/tmp/scrcpy-server.jar`, launches it via `app_process` with `new_display=<width>x<height>/<dpi>` (`tunnel_forward=true`), and bridges `localabstract:scrcpy` through an ephemeral loopback relay (`ScrcpyLoopbackBridge`).
 4. **Fullscreen DeX Viewer:** Samsung One UI detects the trusted virtual display and starts Samsung DeX on that Display ID while `DexViewerActivity` streams the desktop video and forwards your inputs.
 
 ## Documentation Map

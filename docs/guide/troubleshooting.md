@@ -30,7 +30,7 @@ Android resets `adb_wifi_enabled` to `0` on reboots and network transitions.
 
 ### Apps open fullscreen inside DeX instead of resizable windows
 
-1. Open the **Guided Setup Wizard** (gear icon) and verify **Movable Freeform Windows** (`enable_freeform_support`) and **Force Desktop Windowing** (`force_desktop_mode_on_external_displays`) are enabled.
+1. Open the **Guided Setup Wizard** (gear icon) and verify **Movable Freeform Windows** (`enable_freeform_support`), **Force Resizable Activities** (`force_resizable_activities`), and **Force Desktop Windowing** (`force_desktop_mode_on_external_displays`) are enabled.
 2. On Android 16+ / One UI 8.5+, virtual displays may default to fullscreen windowing unless `wm set-display-windowing-mode -d <displayId> 5` (`WINDOWING_MODE_FREEFORM`) is applied. See [Technical Breakdown](../TECHNICAL.md) for the full explanation.
 
 ### Galaxy Z Flip, Galaxy A/M/F, or non-Samsung phones don't show Samsung DeX
@@ -47,11 +47,11 @@ This is a Samsung One UI WindowManager quirk: choosing the native **Split-screen
 
 - Open **Display Profile Editor** and switch **Video Codec** from `H.265` to **`H.264 (Low Latency)`** (or vice versa depending on your Exynos/Snapdragon hardware decoder).
 - Lower **Refresh Rate** from `120 FPS` to **`60 FPS`** or reduce **Bitrate** (e.g., from `24–32 Mbps` down to `16 Mbps`).
-- Ensure your device didn't disable Wireless Debugging mid-launch (`Start DeX` falls back to port `5555` if no `_adb-tls-connect._tcp.` endpoint was resolved).
+- Ensure your device didn't disable Wireless Debugging mid-launch (**Start DeX** waits up to 3 seconds for `_adb-tls-connect._tcp.` mDNS discovery and prompts you to open Setup if no port resolves).
 
 ### Audio is silent or echoes
 
-By design, **Audio Forwarding** is **off by default** so Samsung DeX outputs audio straight through your phone/tablet speakers with zero latency. Only enable **Audio Forwarding** in the Profile Editor (`OPUS` / `AAC` / `RAW`) if you specifically need scrcpy audio streaming.
+By design, **Audio Forwarding** is **off by default** so Samsung DeX outputs audio straight through your phone/tablet speakers with zero latency. Enable **Audio Forwarding** in the Profile Editor (`OPUS` / `AAC` / `RAW`) if you specifically want `AudioStreamDecoder` to decode and play scrcpy audio via `AudioTrack`.
 
 ### Mouse cursor hits an invisible screen boundary
 

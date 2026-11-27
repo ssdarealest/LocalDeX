@@ -3,7 +3,7 @@ title: DeX Viewer, Floating Pill & Input Controls
 description: Managing active sessions, using the draggable Session Pill Toolbar, and navigating with Virtual Trackpad, Direct Touch, S-Pen, mouse, keyboard, and gamepad.
 ---
 
-When you tap **Start DeX**, `DexSessionService` connects to loopback ADB, deploys `scrcpy-server` v3.1 (if not already matching its SHA-256 checksum), launches the virtual display on port `27183`, and opens **DexViewerActivity** in immersive landscape fullscreen.
+When you tap **Start DeX**, `DexSessionService` connects to loopback ADB, verifies and deploys `scrcpy-server` v3.1, launches the virtual display via `ScrcpyLoopbackBridge` (`localabstract:scrcpy`), forces `WINDOWING_MODE_FREEFORM` on the detected Display ID, and opens **DexViewerActivity** in immersive landscape fullscreen.
 
 ## Session Lifecycle
 
@@ -21,7 +21,7 @@ Overlaid on top of the DeX stream is a translucent, draggable **Session Pill Too
 
 | Icon | Action | Behavior |
 | :--- | :--- | :--- |
-| **Mouse / Touch** | **Toggle Input Mode** | Switches dynamically between **Virtual Trackpad** (default on viewer launch) and **Direct Touch**. |
+| **Mouse / Touch** | **Toggle Input Mode** | Switches dynamically between **Virtual Trackpad** and **Direct Touch**, and persists your choice across sessions. |
 | **Hand / Pan** | **Lock / Release Mouse Pointer** | Toggles Android Pointer Capture (`requestPointerCapture` / `releasePointerCapture`) for hardware mice. Highlighted when pointer lock is active. |
 | **Keyboard** | **Show / Hide Soft Keyboard** | Toggles Android's on-screen IME keyboard using `WindowInsetsCompat.Type.ime()`. |
 | **Close (Red)** | **Stop DeX** | Stops `DexSessionService`, closes sockets/decoder, and exits `DexViewerActivity`. |
@@ -38,7 +38,8 @@ Turns the screen into a laptop-style relative touchpad controlling a virtual DeX
 | :--- | :--- |
 | **1-finger glide** | Moves the virtual desktop cursor (`1.35x` sensitivity multiplier). |
 | **1-finger tap** (`< 200 ms`) | Left click (`BUTTON_PRIMARY` down + up at cursor position). |
-| **2-finger vertical swipe** | Vertical scroll wheel at cursor position. |
+| **Double-tap & hold + move** | Enters drag mode (`BUTTON_PRIMARY` held) for dragging windows and selecting text. |
+| **2-finger swipe** | Horizontal and vertical two-axis scrolling at the cursor position. |
 | **2-finger tap** (`< 200 ms`) | Right click (`BUTTON_SECONDARY` down + up at cursor position). |
 
 ### 2. Direct Touch Mode

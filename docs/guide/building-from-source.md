@@ -9,7 +9,7 @@ LocalDeX is structured as a multi-module Android Gradle project written in 100% 
 
 - **`:app`** (`org.localdex`) — Jetpack Compose Material 3 UI, DataStore profile repository, foreground `DexSessionService`, `DexTileService`, `PairingReplyReceiver`, `FoldablePostureTracker`, and `DexViewerActivity`.
 - **`:core:adb`** (`org.localdex.core.adb`) — Pure-Kotlin loopback ADB over TLS 1.3 (`AdbConnection`, `AdbStream`, `AdbMessage`), BouncyCastle RSA-2048/X.509 (`AdbCrypto`), `NsdManager` discovery (`AdbDiscoveryManager`), pairing (`AdbPairingClient`), and `WRITE_SECURE_SETTINGS` automation (`AdbPermissionManager`).
-- **`:core:scrcpy`** (`org.localdex.core.scrcpy`) — `scrcpy-server` v3.1 deployment/process launcher (`ScrcpyServerManager`), display presets (`DisplayProfile`), low-latency `MediaCodec` decoder (`VideoStreamDecoder`), control framing (`ControlMessage`, `ControlSocketWriter`), and multi-mode `InputEngine`.
+- **`:core:scrcpy`** (`org.localdex.core.scrcpy`) — `scrcpy-server` v3.1 deployment/bridge (`ScrcpyServerManager`, `ScrcpyLoopbackBridge`), display presets (`DisplayProfile`), low-latency `MediaCodec` decoders (`VideoStreamDecoder`, `AudioStreamDecoder`), control framing (`ControlMessage`, `ControlSocketWriter`), and multi-mode `InputEngine`.
 
 ## Prerequisites
 
@@ -49,5 +49,5 @@ Both the bundled asset and `EXPECTED_SERVER_SHA256` must remain aligned if upgra
 
 - **License:** GNU General Public License v3.0 (`LICENSE`).
 - **Reproducible FOSS Builds:** Zero Google Play Services (GMS), Firebase, or closed-source telemetry. Metadata and build recipes live in `fastlane/metadata/android/en-US/` and `metadata/org.localdex.yml`.
-- **CI Workflow:** `.github/workflows/build-apk.yml` executes unit tests and builds both debug and release APKs on `main` pushes containing `release: vX.Y.Z` in the commit message.
+- **CI Workflows:** `.github/workflows/ci.yml` runs `./gradlew test --stacktrace`, `./gradlew lintDebug --stacktrace`, and `website/` sync/typecheck/build on `main` pushes and pull requests; `.github/workflows/build-apk.yml` builds and publishes release APKs when commit messages include `release: vX.Y.Z`.
 - **Commit Convention:** Conventional Commits (`<type>(<scope>): <short description>`) as specified in `AGENTS.md`.
