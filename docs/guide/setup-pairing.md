@@ -16,6 +16,7 @@ At the top of the home screen, the **Hero Status Card** displays your current re
 | **Ready to Launch** | Pairing and `WRITE_SECURE_SETTINGS` are verified. Tap **Start DeX** to launch your session. |
 | **Launching Virtual Display...** | `DexSessionService` is connecting over loopback ADB and starting `scrcpy-server`. |
 | **Session Active (Display `#N`)** | Samsung DeX is actively running on virtual display `#N`. |
+| **Session Error** | Displays connection, SHA-256 verification, or server launch error details with a quick Setup & Retry link. |
 
 To open the **Guided Setup Wizard** at any time, tap the **Settings (gear)** icon in the top app bar or tap **Tap to complete Setup Wizard** on the status card.
 
@@ -72,6 +73,5 @@ Once `WRITE_SECURE_SETTINGS` is granted, the bottom of the **Guided Setup Wizard
 | Toggle | Global Setting Modified | Effect |
 | :--- | :--- | :--- |
 | **Movable Freeform Windows** | `enable_freeform_support` | Enables freeform windowing and edge-resizable floating app windows inside DeX mode. |
+| **Force Resizable Activities** | `force_resizable_activities` | Allows non-resizable apps to scale smoothly inside floating DeX windows. |
 | **Force Desktop Windowing** | `force_desktop_mode_on_external_displays` | Forces desktop mode on secondary virtual displays across all apps (also enables AOSP desktop fallback on non-DeX devices). |
-
-> **Note:** Internally, `AdbPermissionManager` also supports `force_resizable_activities` and `persist.wm.debug.desktop_mode` when configured via ADB shell helpers.

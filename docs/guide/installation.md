@@ -55,7 +55,7 @@ adb shell settings put global verifier_verify_adb_installs 1
 
 Declared in `AndroidManifest.xml`:
 
-- `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`: Loopback TCP/TLS communication with `127.0.0.1` (`adbd` and `scrcpy-server`) and Wi-Fi lock maintenance during active sessions.
+- `INTERNET`, `ACCESS_NETWORK_STATE`, `CHANGE_NETWORK_STATE`, `ACCESS_WIFI_STATE`: Loopback TCP/TLS communication with `127.0.0.1` (`adbd` and `scrcpy-server`), Android 14+ `connectedDevice` foreground service eligibility, and Wi-Fi lock maintenance during active sessions.
 - `POST_NOTIFICATIONS`: Shows the inline-reply pairing prompt and active session controls.
 - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `WAKE_LOCK`: Keeps the virtual display session and loopback stream alive when the viewer is minimized.
 - `WRITE_SECURE_SETTINGS`: Protected system permission granted locally via loopback ADB (`pm grant`) after pairing, used only for self-healing `adb_wifi_enabled` and toggling One UI desktop windowing flags.
