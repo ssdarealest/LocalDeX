@@ -1,0 +1,39 @@
+Categories:
+  - System
+  - Utilities
+License: GPL-3.0-or-later
+SourceCode: https://github.com/ssdarealest/LocalDeX
+IssueTracker: https://github.com/ssdarealest/LocalDeX/issues
+
+AutoName: LocalDeX
+Summary: Run Samsung DeX natively on Galaxy screens without external displays
+Description: |-
+  LocalDeX is a Free and Open Source Software (FOSS) application that enables
+  Samsung DeX to run natively on your Galaxy phone or tablet's own screen—with
+  no external monitor, no dock, no USB cable, no PC, and no root access.
+
+  Key Features:
+  * Loopback ADB over TLS on localhost (127.0.0.1)
+  * Self-healing WRITE_SECURE_SETTINGS permission automation
+  * Bundled scrcpy-server v3.1 virtual display creation (--new-display)
+  * Hardware-accelerated low-latency MediaCodec pipeline (H.264 / H.265)
+  * Galaxy Z Fold posture awareness (cover/inner profiles and tabletop flex mode)
+  * Multi-mode input: Trackpad, Direct Touch, S-Pen stylus, and Mouse Pointer Lock
+  * 100% FOSS with zero proprietary dependencies or analytics
+
+RepoType: git
+Repo: https://github.com/ssdarealest/LocalDeX.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: app
+    gradle:
+      - yes
+    output: build/outputs/apk/release/LocalDeX-v1.0.0-universal.apk
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1

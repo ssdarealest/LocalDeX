@@ -1,0 +1,8 @@
+Initial FOSS release of LocalDeX v1.0.0:
+- Native loopback ADB TLS pairing and connection (Android 11+).
+- Scrcpy-server v3.1 integration for virtual display creation.
+- Material 3 Expressive UI with DeX Cobalt theme and OLED dark mode.
+- Galaxy Z Fold posture awareness (tabletop mode, cover/inner screen profiles).
+- Low-latency MediaCodec video pipeline (H.264 / H.265).
+- Multi-mode input engine (Virtual Trackpad, Direct Touch, hardware mouse & keyboard).
+- Self-healing WRITE_SECURE_SETTINGS grant.

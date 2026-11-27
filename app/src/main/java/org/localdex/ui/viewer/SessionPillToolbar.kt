@@ -57,7 +57,10 @@ import kotlin.math.roundToInt
 @Composable
 fun SessionPillToolbar(
     inputMode: InputMode,
+    isPointerCaptured: Boolean = false,
+    imeBottomInset: Int = 0,
     onToggleInputMode: () -> Unit,
+    onTogglePointerCapture: (() -> Unit)? = null,
     onTriggerKeyboard: () -> Unit,
     onStopSession: () -> Unit,
     modifier: Modifier = Modifier
@@ -67,10 +70,10 @@ fun SessionPillToolbar(
     var isExpanded by remember { mutableStateOf(false) }
     var isTouching by remember { mutableStateOf(false) }
 
-    // Auto-dim pill to 0.35 alpha after 3 seconds of inactivity
+    // Auto-dim pill to 0.35 alpha after 3 seconds of inactivity (stays bright if keyboard is visible)
     var alphaVal by remember { mutableFloatStateOf(0.95f) }
-    LaunchedEffect(isTouching, isExpanded) {
-        if (!isTouching && !isExpanded) {
+    LaunchedEffect(isTouching, isExpanded, imeBottomInset) {
+        if (!isTouching && !isExpanded && imeBottomInset == 0) {
             delay(3000)
             alphaVal = 0.35f
         } else {
@@ -138,6 +141,20 @@ fun SessionPillToolbar(
                                 contentDescription = "Toggle Input Mode",
                                 tint = MaterialTheme.colorScheme.primary
                             )
+                        }
+
+                        // Toggle Pointer Capture / Mouse Lock
+                        if (onTogglePointerCapture != null) {
+                            IconButton(
+                                onClick = onTogglePointerCapture,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.PanTool,
+                                    contentDescription = if (isPointerCaptured) "Release Mouse Pointer" else "Lock Mouse Pointer",
+                                    tint = if (isPointerCaptured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         // Trigger Soft Keyboard

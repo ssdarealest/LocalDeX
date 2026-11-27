@@ -40,7 +40,7 @@ android {
 
     applicationVariants.all {
         outputs.all {
-            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val output = this as? com.android.build.gradle.api.ApkVariantOutput
             output?.outputFileName = "LocalDeX-v${versionName}-universal.apk"
         }
     }
@@ -54,6 +54,10 @@ android {
         jvmTarget = "17"
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -64,6 +68,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1,LICENSE.txt,NOTICE.txt}"
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -88,12 +93,15 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material-icons-extended)
+    implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Security & Cryptography
+    implementation(libs.bouncycastle.bcprov)
 
     // Testing
     testImplementation(libs.junit)

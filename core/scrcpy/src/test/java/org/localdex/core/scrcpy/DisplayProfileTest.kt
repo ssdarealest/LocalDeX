@@ -34,5 +34,11 @@ class DisplayProfileTest {
 
         val profile4_3 = DisplayProfile.PRESET_4_3
         assertThat(profile4_3.aspectRatio).isWithin(0.01f).of(4f / 3f)
+
+        val foldCover = DisplayProfile.PRESET_FOLD_COVER
+        assertThat(foldCover.toNewDisplayArg()).isEqualTo("2316x904/380")
+
+        val foldInner = DisplayProfile.PRESET_FOLD_INNER
+        assertThat(foldInner.toNewDisplayArg()).isEqualTo("2176x1812/360")
     }
 }
