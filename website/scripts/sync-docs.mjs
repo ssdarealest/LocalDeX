@@ -27,6 +27,8 @@ const PAGE_ICONS = {
   troubleshooting: 'Wrench',
   technical: 'Cpu',
   'building-from-source': 'Terminal',
+  'deploy-website-cloudflare': 'Cloud',
+  'publishing-fdroid-izzyondroid': 'PackageCheck',
 };
 
 const KNOWN_SLUGS = new Set(Object.keys(PAGE_ICONS));
