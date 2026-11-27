@@ -6,7 +6,14 @@
       "commit": "ea54b6deecfad44e403928a86b11fced52220338",
       "sourceType": "github",
       "skillPath": ".agents/skills/fumadocs/SKILL.md",
-      "computedHash": "c4ae2b27ab23ff4aa0dbad00d5acac5262d192f4b08ce1033dee4c977c39ddaa"
+      "computedHash": "c4ae2b27ab23ff4aa0dbad00d5acac5262d9192f4b08ce1033dee4c977c39ddaa"
+    },
+    "gradle-run": {
+      "source": "chrisbanes/skills",
+      "commit": "6cfb02af68fae7df5e27dcfc23056c0d3941dec7",
+      "sourceType": "github",
+      "skillPath": "skills/gradle-run/SKILL.md",
+      "computedHash": "043462cfa81c560b7cb2d61b6957fad43efc9216585c7256f415ef742d9eae92"
     }
   }
 }
