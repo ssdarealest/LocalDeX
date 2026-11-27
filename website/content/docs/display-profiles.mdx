@@ -4,7 +4,7 @@ description: Built-in display presets, custom resolution and DPI tuning, video c
 icon: SlidersHorizontal
 ---
 
-LocalDeX launches `scrcpy-server` with `new_display=<width>x<height>/<dpi>` based on your selected **Display Profile**. Your chosen preset, custom dimensions, and stream preferences are persisted locally using Jetpack DataStore (`localdex_preferences`).
+LocalDeX launches `scrcpy-server` with `--new-display=<width>x<height>/<dpi>` based on your selected **Display Profile**. Your chosen preset, custom dimensions, and stream preferences are persisted locally using Jetpack DataStore (`localdex_preferences`).
 
 ## Built-in Display Presets
 
@@ -38,23 +38,20 @@ A live wireframe box renders your aspect ratio (`width / height`, clamped visual
 
 - **Width (px) & Height (px):** Enter any custom pixel dimensions (for example, `2560 × 1440` for WQHD).
 - **Display Density (DPI):** Slider from **`120` to `480 DPI`** (in `30 DPI` steps):
-  - **Lower DPI (`120–210`):** Shrinks UI chrome and gives you more room for multiple floating windows.
-  - **Higher DPI (`300–480`):** Enlarges taskbar icons, window title bars, and text for easier touch legibility on smaller screens.
+  - **Lower DPI** (`120–210`): Shrinks UI chrome and gives you more room for multiple floating windows.
+  - **Higher DPI** (`300–480`): Enlarges taskbar icons, window title bars, and text for easier touch legibility on smaller screens.
 
 ### Performance & Encoding
 
 - **Refresh Rate:** Choose between **`60 FPS`** and **`120 FPS`**.
 - **Video Codec:**
   - **`H.264 (Low Latency)`** (`video/avc`, default): Widest hardware decoder compatibility and minimal encode/decode latency.
-  - **`H.265 (High Efficiency)`** (`video/hevc`): Better image clarity per megabit at high resolutions and framerates.
+  - **`H.265 (High Efficiency)`** (`video/hevc`): Better image clarity per megabit at high resolutions/framerates.
 - **Bitrate:** Slider from **`8` to `32 Mbps`** (in `4 Mbps` steps). Higher bitrates keep fine desktop text sharp when dragging windows or scrolling.
 
 ### Audio Forwarding
 
-<Callout type="info" title="Native Speakers by Default">
-Because Samsung DeX runs directly on your device, **Audio Forwarding** defaults to **off (`audio=false`)** so your phone or tablet speakers play DeX audio natively with zero encoding latency.
-</Callout>
+- **Off by default (`audio=false`):** Because Samsung DeX runs directly on your device, your phone or tablet speakers already play DeX audio natively with zero latency or compression overhead.
+- **Optional Loopback Audio (`audio=true`):** Enable **Audio Forwarding** in the Profile Editor if you specifically want `scrcpy-server` to stream audio over loopback using **`OPUS`**, **`AAC`**, or **`RAW`** encoding.
 
-Enable **Audio Forwarding** in the Profile Editor (`audio=true`) if you specifically want `scrcpy-server` to stream audio over loopback using **`OPUS`**, **`AAC`**, or **`RAW`** encoding.
-
-Tap **Save and Apply Profile** to persist your custom configuration in DataStore.
+Tap **Save and Apply Profile** to store your custom settings as `custom` and make it selectable inside the **Display Presets** list alongside built-in presets.
