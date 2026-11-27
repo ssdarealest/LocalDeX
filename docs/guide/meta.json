@@ -12,6 +12,8 @@
     "foldables-and-quick-settings",
     "troubleshooting",
     "---Development---",
-    "building-from-source"
+    "building-from-source",
+    "deploy-website-cloudflare",
+    "publishing-fdroid-izzyondroid"
   ]
 }

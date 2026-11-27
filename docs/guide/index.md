@@ -33,3 +33,5 @@ Normally, Samsung DeX on Galaxy smartphones requires plugging into an external H
 - **[Troubleshooting](./troubleshooting.md):** Fix Wi-Fi/mDNS discovery, pairing code invalidation, window resizing, and video/audio quirks.
 - **[Technical Breakdown](../TECHNICAL.md):** Inspect the underlying ADB wire protocol, TLS/crypto implementation, and scrcpy integration.
 - **[Building from Source](./building-from-source.md):** Compile, test, and verify reproducible builds locally.
+- **[Deploy Website on Cloudflare Workers](./deploy-website-cloudflare.md):** Bundle and deploy the `website/` Next.js 16 + Fumadocs site to Cloudflare Workers via OpenNext.
+- **[Publishing to IzzyOnDroid & F-Droid](./publishing-fdroid-izzyondroid.md):** Configure release signing, Fastlane assets, binary source compliance, and submit to IzzyOnDroid and F-Droid.
