@@ -12,6 +12,8 @@
     "troubleshooting",
     "---Architecture & Development---",
     "technical",
-    "building-from-source"
+    "building-from-source",
+    "deploy-website-cloudflare",
+    "publishing-fdroid-izzyondroid"
   ]
 }

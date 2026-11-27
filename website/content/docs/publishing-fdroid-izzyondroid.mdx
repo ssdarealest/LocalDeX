@@ -1,0 +1,147 @@
+---
+title: Publishing to IzzyOnDroid & F-Droid
+description: Step-by-step checklist and inclusion requirements for distributing LocalDeX on IzzyOnDroid and submitting to the official F-Droid repository.
+icon: PackageCheck
+---
+
+LocalDeX is built strictly without proprietary Google Play Services (GMS), Firebase, ads, or analytics under **GPL-3.0**, targeting both **IzzyOnDroid** (fast developer-signed mirror + reproducible-build checks) and the official **F-Droid** main repository (`fdroiddata`).
+
+Before submitting to either store, review the current repo prerequisites carefully.
+
+## Pre-Submission Checklist (Required for Both Stores)
+
+### 1. Configure Proper Release Signing
+
+Currently, `app/build.gradle.kts` falls back to the debug keystore for `release` builds:
+
+```kotlin
+signingConfig = signingConfigs.getByName("debug") // Default for unsigned/local release builds
+```
+
+<Callout type="info" title="Never publish a permanent store release signed with Android's debug key">
+Users would be unable to upgrade seamlessly once you switch to a real release keystore.
+</Callout>
+
+1. Generate a dedicated release keystore stored **outside Git** (never commit `.jks`/`.keystore` files or passwords):
+   ```bash
+   keytool -genkeypair -v -keystore localdex-release.jks -alias localdex -keyalg RSA -keysize 4096 -validity 10000
+   ```
+2. Update `app/build.gradle.kts` `signingConfigs` to read `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` from environment variables when present (leaving F-Droid builds unsigned so F-Droid can sign with its own repository key, while CI release tags sign reproducibly for GitHub Releases & IzzyOnDroid).
+3. Add those 4 signing values as encrypted **GitHub Actions secrets** used by `.github/workflows/build-apk.yml`.
+
+### 2. Complete Fastlane Graphics & Metadata
+
+LocalDeX already provides text metadata in `fastlane/metadata/android/en-US/`:
+
+- `title.txt`
+- `short_description.txt` (must remain **at most 80 characters**)
+- `full_description.txt`
+- `changelogs/<versionCode>.txt` (must match `defaultConfig.versionCode` and stay **at most 500 characters**)
+
+Before submitting, add the missing image assets under `fastlane/metadata/android/en-US/images/`:
+
+```text
+fastlane/
+└── metadata/
+    └── android/
+        └── en-US/
+            ├── title.txt
+            ├── short_description.txt
+            ├── full_description.txt
+            ├── changelogs/
+            │   └── 1.txt
+            └── images/
+                ├── icon.png              # 512 x 512 PNG
+                ├── featureGraphic.png    # 1024 x 500 PNG (recommended)
+                └── phoneScreenshots/     # At least 2 PNG/JPG screenshots on Galaxy hardware
+                    ├── 1_home.png
+                    └── 2_dex_viewer.png
+```
+
+### 3. Tag a Release Cleanly
+
+F-Droid and IzzyOnDroid track Git tags (`v1.0.0`, `v1.0.1`, etc.) matching `versionName` and `versionCode` in `app/build.gradle.kts`:
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
+2. Add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
+3. Update `metadata/org.localdex.yml` (`CurrentVersion`, `CurrentVersionCode`, and latest `Builds` entry).
+4. Commit with `.github/workflows/build-apk.yml`'s release trigger (`chore(release): release: vX.Y.Z`) or push an annotated tag (`git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin vX.Y.Z`) and ensure `LocalDeX-vX.Y.Z-universal.apk` is attached to the GitHub Release.
+
+---
+
+## Path 1: Submitting to IzzyOnDroid (Faster Onboarding)
+
+**IzzyOnDroid** mirrors developer-built release APKs attached to tagged GitHub Releases (`<= 30 MB` per APK — LocalDeX's R8 release APK is ~13 MB) and verifies authenticity through automated **Reproducible Builds (`rbtlog`)**.
+
+### Why LocalDeX Fits IzzyOnDroid First
+- Pulls signed APKs directly from your tagged GitHub Releases once reviewed.
+- Automatically syncs descriptions, changelogs, icons, and screenshots from `fastlane/metadata/android/`.
+- Independent builders verify that building from source produces the identical APK (awarding the green Reproducible Builds badge).
+
+### Submission Steps
+
+1. Confirm your latest tagged GitHub Release contains your properly signed **`LocalDeX-vX.Y.Z-universal.apk`** (compiled from the exact tagged commit).
+2. Verify all unit tests, `lintDebug`, and Fastlane constraints (`short_description.txt <= 80 chars`, `changelogs/<versionCode>.txt <= 500 chars`, valid PNG screenshots).
+3. Open a submission issue (RFP) on the [IzzyOnDroid Repo Issue Tracker](https://gitlab.com/IzzyOnDroid/repo/-/issues) with:
+   - **App ID & Name:** `org.localdex` — LocalDeX
+   - **License:** GPL-3.0 (`https://github.com/ssdarealest/LocalDeX/blob/main/LICENSE`)
+   - **Source Repository:** `https://github.com/ssdarealest/LocalDeX`
+   - **Fastlane Metadata Path:** `fastlane/metadata/android`
+   - **Release Tag / APK Asset:** Link to the tagged GitHub Release (`vX.Y.Z`) and note that `scrcpy-server` v3.1 (`app/src/main/assets/scrcpy-server`) matches upstream official release SHA-256 (`958f0944a62f23b1f33a16e9eb14844c1a04b882ca175a738c16d23cb22b86c0`).
+   - **Signing / Reproducible Build Notes:** State whether you intend to opt in to Reproducible Builds verification (`rbtlog`) with JDK 17 / Android SDK 36.
+
+---
+
+## Path 2: Submitting to F-Droid Official (`fdroiddata`)
+
+Unlike IzzyOnDroid, the official F-Droid main repository compiles apps **100% from source** on isolated build servers (`fdroidserver`) and signs APKs with F-Droid's own repository key (unless using F-Droid Reproducible Builds with an approved upstream signature).
+
+### Critical F-Droid Policy Check: Bundled `scrcpy-server` Binary
+
+F-Droid's Inclusion Policy and `fdroid scanner` **reject precompiled `.jar`, `.apk`, `.dex`, or `.so` binaries checked directly into source control**—which includes `app/src/main/assets/scrcpy-server` (`classes.dex` archive).
+
+Before opening an `fdroiddata` Merge Request, resolve this using F-Droid's `srclibs` workflow inside `metadata/org.localdex.yml`:
+
+1. Keep the source tag reference for upstream **Genymobile/scrcpy** (`v3.1`) via `srclibs:`:
+   ```yaml
+   srclibs:
+     - scrcpy@v3.1
+   ```
+2. In the F-Droid build recipe (`Builds:` block), remove the prebuilt asset during `prebuild:`, compile `scrcpy-server` from source (`meson` / Gradle inside `$$scrcpy$$/server`), and install it to `app/src/main/assets/scrcpy-server`.
+3. Update `EXPECTED_SERVER_SHA256` (or build-generated asset verification) if the locally built `scrcpy-server` DEX timestamp differs from upstream's published release artifact.
+4. Also ensure `app/build.gradle.kts` leaves `signingConfig` unset when signing env vars are absent so `fdroid build` compiles cleanly without referencing local keystores or debug signing on release APKs.
+
+### Validating Locally with `fdroidserver`
+
+Test your recipe locally before submitting (Linux + Docker or `fdroidserver` package):
+
+1. Install `fdroidserver`:
+   ```bash
+   python3 -m pip install fdroidserver
+   ```
+2. Fork and clone [fdroiddata](https://gitlab.com/fdroid/fdroiddata) on GitLab:
+   ```bash
+   git clone https://gitlab.com/YOUR_GITLAB_USER/fdroiddata.git
+   cd fdroiddata
+   git checkout -b org.localdex
+   ```
+3. Copy LocalDeX's recipe from `metadata/org.localdex.yml` in this repo to `metadata/org.localdex.yml` inside `fdroiddata`, updating `commit:` to your release tag and adding `srclibs` / `prebuild` as needed.
+4. Run F-Droid metadata lint, scanner, and build verification:
+   ```bash
+   fdroid readmeta
+   fdroid lint org.localdex
+   fdroid build -v -l org.localdex
+   ```
+   Resolve any warnings from `fdroid scanner` (binary artifacts, non-FOSS Maven dependencies, or telemetry signatures).
+
+### Opening the `fdroiddata` Merge Request
+
+1. Push your branch to your GitLab fork:
+   ```bash
+   git add metadata/org.localdex.yml
+   git commit -m "New app: org.localdex"
+   git push origin org.localdex
+   ```
+2. Open a **Merge Request** targeting `fdroid/fdroiddata:master` on GitLab.
+3. Include a concise description confirming GPL-3.0 licensing, zero GMS/Firebase dependencies, Fastlane metadata readiness, and how `scrcpy-server` v3.1 is built from source during the recipe's build steps.
+4. Monitor the automated `fdroiddata` GitLab CI pipeline and maintainer review comments.
