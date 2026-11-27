@@ -16,10 +16,10 @@ LocalDeX App ──(Loopback ADB over TLS 1.3, 127.0.0.1)──▶ adbd Daemon
      │  1. Push bundled scrcpy-server v3.1 to /data/local/tmp/scrcpy-server.jar (SHA-256 verified)
      │  2. app_process / com.genymobile.scrcpy.Server new_display=<WxH/DPI>
      │  3. wm set-display-windowing-mode -d <displayId> 5   (force WINDOWING_MODE_FREEFORM)
-     │  4. Open loopback video and control sockets (tunnel_forward=false, port=27183)
+     │  4. Bridge localabstract:scrcpy streams via ScrcpyLoopbackBridge (tunnel_forward=true)
      ▼
 scrcpy-server ──▶ Creates trusted virtual display ──▶ Samsung One UI triggers DeX desktop
-     │  H.264/H.265 stream ──▶ MediaCodec (KEY_LOW_LATENCY = 1) ──▶ Fullscreen SurfaceView
+     │  H.264/H.265 + Audio ──▶ MediaCodec (KEY_LOW_LATENCY = 1) / AudioTrack ──▶ Fullscreen SurfaceView
      ◀─ Multi-mode input packets (Trackpad, Touch, S-Pen, Pointer Capture Mouse, Gamepad)
 ```
 
@@ -48,7 +48,7 @@ Android Wireless Debugging enforces mutual TLS authentication:
   - Pairing service: `_adb-tls-pairing._tcp`
   - Connection service: `_adb-tls-connect._tcp`
 - **Inline Notification Reply:** During pairing, Android displays a 6-digit PIN on the Wireless Debugging screen. Because navigating away from Developer Options cancels or regenerates the PIN, LocalDeX uses a foreground notification with `RemoteInput` (`PairingReplyReceiver.kt`). The user enters the 6-digit PIN directly in the notification reply field while remaining on the Developer Options screen.
-- **TLS 1.3 SPAKE2+ Pairing Client (`AdbPairingClient.kt`):** Implements the SPAKE2+ password-authenticated key exchange over TLS 1.3 to authenticate the keypair with `adbd`.
+- **TLS 1.3 SPAKE2+ Pairing Client (`AdbPairingClient.kt`, `Spake25519.kt`, `PairingAuth.kt`):** Exports 64-byte TLS 1.3 keying material via Conscrypt (`"adb-label\0"`), performs SPAKE2+ password-authenticated key exchange over Edwards25519, derives HKDF-SHA256 AES-128-GCM keys, and exchanges encrypted `PeerInfo` packets with `adbd`.
 
 ### Self-Healing Permission Grant
 On Android, Wireless Debugging automatically disables itself whenever the phone reboots or disconnects from Wi-Fi. LocalDeX solves this with automated self-healing:
@@ -68,10 +68,10 @@ On Android, Wireless Debugging automatically disables itself whenever the phone 
 ## 3. Virtual Display Creation & One UI Desktop Mode
 
 ### Trusted Virtual Display (`scrcpy-server`)
-LocalDeX launches `scrcpy-server` via loopback ADB shell:
+LocalDeX launches `scrcpy-server` via loopback ADB shell and exposes a local FIFO TCP relay (`ScrcpyLoopbackBridge.kt`) backed by `localabstract:scrcpy`:
 ```sh
 CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server \
-    3.1 scid=0 log_level=info tunnel_forward=false port=27183 \
+    3.1 scid=-1 log_level=info tunnel_forward=true send_dummy_byte=true \
     new_display=1920x1080/240 video_codec=h264 video_bit_rate=16000000 max_fps=60 \
     audio=false control=true stay_awake=true power_off_on_close=false cleanup=true
 ```
@@ -96,12 +96,13 @@ Android has a developer option for simulated secondary displays (`settings put g
 
 ---
 
-## 4. Hardware-Accelerated Video Pipeline (`:core:scrcpy`)
+## 4. Hardware-Accelerated Video & Audio Pipeline (`:core:scrcpy`)
 
-### Low-Latency MediaCodec Decoder (`VideoStreamDecoder.kt`)
-- **Direct Loopback Sockets:** Connects directly to `127.0.0.1:27183` over loopback.
-- **Hardware Zero-Copy Rendering:** Decodes H.264 (AVC) and H.265 (HEVC) video streams using Android's hardware `MediaCodec` configured with `KEY_LOW_LATENCY = 1` and `KEY_PRIORITY = 0` (real-time). Decoded frames are rendered directly into the native window buffer of a `SurfaceView` without copying bitmap bytes into JVM memory.
-- **Framing Protocol:** LocalDeX demuxes scrcpy's packet headers (session metadata, SPS/PPS configuration frames, and PTS timestamps) to feed `MediaCodec` with minimal queuing jitter.
+### Low-Latency MediaCodec Decoder & Loopback Bridge (`ScrcpyLoopbackBridge.kt`, `VideoStreamDecoder.kt`, `AudioStreamDecoder.kt`)
+- **Forward-Tunnel Loopback Bridge:** `ScrcpyLoopbackBridge` binds an ephemeral `127.0.0.1` TCP port and multiplexes accepted clients over `AdbConnection.openStream("localabstract:scrcpy")` in strict FIFO socket order (`Video -> Audio -> Control`). `VideoStreamDecoder` consumes the initial dummy byte before headers, then video and audio streams decode concurrently so `DesktopConnection.open()` never deadlocks.
+- **Hardware Zero-Copy Rendering:** Decodes H.264 (AVC) and H.265 (HEVC) video streams using Android's hardware `MediaCodec` configured with `KEY_LOW_LATENCY = 1` and maximum operating rate directly onto a `SurfaceView` without copying bitmap bytes into JVM memory.
+- **Loopback Audio (`AudioStreamDecoder.kt`):** When enabled per profile (`audio=true`), decodes `OPUS`, `AAC`, and `FLAC` packets via `MediaCodec` (or passes `RAW` 48 kHz stereo PCM directly) into a low-latency `AudioTrack`.
+- **Framing Protocol:** LocalDeX demuxes scrcpy packet headers (`PTS`, config/keyframe flags, SPS/PPS configuration frames, and 21-byte fixed-point `Scroll` packets) to keep video, audio, and control streams synchronized.
 
 ---
 
@@ -112,8 +113,8 @@ LocalDeX translates Android motion and key events into binary `ControlMessage` p
 ### 1. Virtual Trackpad Mode
 - **1-finger glide:** Updates internal virtual coordinates (`cursorX`, `cursorY`) with a sensitivity multiplier (`1.35x`).
 - **1-finger tap:** Injects `ACTION_DOWN` followed immediately by `ACTION_UP` with `BUTTON_PRIMARY` (left click).
-- **1-finger drag:** Holds `BUTTON_PRIMARY` during `ACTION_MOVE` for window repositioning and text selection.
-- **2-finger scroll:** Measures relative touch deltas to inject two-axis `ControlMessage.Scroll` packets.
+- **1-finger drag:** Double-tap-and-hold transitions into drag mode (`isDragging`), holding `BUTTON_PRIMARY` during `ACTION_MOVE` until release.
+- **2-finger scroll:** Measures relative horizontal and vertical touch deltas to inject 21-byte 16-bit fixed-point `ControlMessage.Scroll` packets.
 - **2-finger tap:** Injects `BUTTON_SECONDARY` (right click).
 
 ### 2. Direct Touch Mode
