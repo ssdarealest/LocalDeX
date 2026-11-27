@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeveloperMode
@@ -68,117 +70,152 @@ fun SetupWizardSheet(
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text(
-                text = "Guided Setup Wizard",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Text(
-                text = "Complete these 4 one-time steps to configure loopback Samsung DeX.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        SetupWizardContent(
+            hasNotificationPermission = hasNotificationPermission,
+            isDeveloperOptionsEnabled = isDeveloperOptionsEnabled,
+            hasSecureSettingsPermission = hasSecureSettingsPermission,
+            discoveredPairingPort = discoveredPairingPort,
+            discoveredConnectPort = discoveredConnectPort,
+            isFreeformEnabled = isFreeformEnabled,
+            isForceResizableEnabled = isForceResizableEnabled,
+            isDesktopModeEnabled = isDesktopModeEnabled,
+            onToggleFreeform = onToggleFreeform,
+            onToggleForceResizable = onToggleForceResizable,
+            onToggleDesktopMode = onToggleDesktopMode,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onTriggerPairingNotification = onTriggerPairingNotification,
+            onOpenDeveloperSettings = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                context.startActivity(intent)
+            }
+        )
+    }
+}
 
-            Spacer(modifier = Modifier.height(4.dp))
+@Composable
+internal fun SetupWizardContent(
+    hasNotificationPermission: Boolean,
+    isDeveloperOptionsEnabled: Boolean,
+    hasSecureSettingsPermission: Boolean,
+    discoveredPairingPort: Int?,
+    discoveredConnectPort: Int?,
+    isFreeformEnabled: Boolean = false,
+    isForceResizableEnabled: Boolean = false,
+    isDesktopModeEnabled: Boolean = false,
+    onToggleFreeform: ((Boolean) -> Unit)? = null,
+    onToggleForceResizable: ((Boolean) -> Unit)? = null,
+    onToggleDesktopMode: ((Boolean) -> Unit)? = null,
+    onRequestNotificationPermission: () -> Unit,
+    onTriggerPairingNotification: (pairingPort: Int, connectPort: Int) -> Unit,
+    onOpenDeveloperSettings: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text(
+            text = "Guided Setup Wizard",
+            style = MaterialTheme.typography.headlineMedium
+        )
+        Text(
+            text = "Complete these 4 one-time steps to configure loopback Samsung DeX.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
-            // Step 1: Notifications
-            StepCard(
-                stepNumber = "1",
-                title = "Notification Permission",
-                description = "Required to display the 6-digit pairing code entry box while in Android Settings.",
-                icon = Icons.Default.Notifications,
-                isCompleted = hasNotificationPermission,
-                actionLabel = "Grant Permission",
-                onAction = onRequestNotificationPermission
-            )
+        Spacer(modifier = Modifier.height(4.dp))
 
-            // Step 2: Developer Options
-            StepCard(
-                stepNumber = "2",
-                title = "Developer Options",
-                description = "Enable Developer Options by tapping 'Build number' 7 times in About Phone.",
-                icon = Icons.Default.DeveloperMode,
-                isCompleted = isDeveloperOptionsEnabled,
-                actionLabel = "Open Settings",
-                onAction = {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-                    context.startActivity(intent)
-                }
-            )
+        // Step 1: Notifications
+        StepCard(
+            stepNumber = "1",
+            title = "Notification Permission",
+            description = "Required to display the 6-digit pairing code entry box while in Android Settings.",
+            icon = Icons.Default.Notifications,
+            isCompleted = hasNotificationPermission,
+            actionLabel = "Grant Permission",
+            onAction = onRequestNotificationPermission
+        )
 
-            // Step 3: Wireless Debugging & Pairing
-            StepCard(
-                stepNumber = "3",
-                title = "Wireless Debugging Pairing",
-                description = if (discoveredPairingPort != null && discoveredPairingPort > 0) {
-                    "Pairing service detected on port $discoveredPairingPort! Tap below to open notification reply."
+        // Step 2: Developer Options
+        StepCard(
+            stepNumber = "2",
+            title = "Developer Options",
+            description = "Enable Developer Options by tapping 'Build number' 7 times in About Phone.",
+            icon = Icons.Default.DeveloperMode,
+            isCompleted = isDeveloperOptionsEnabled,
+            actionLabel = "Open Settings",
+            onAction = onOpenDeveloperSettings
+        )
+
+        // Step 3: Wireless Debugging & Pairing
+        StepCard(
+            stepNumber = "3",
+            title = "Wireless Debugging Pairing",
+            description = if (discoveredPairingPort != null && discoveredPairingPort > 0) {
+                "Pairing service detected on port $discoveredPairingPort! Tap below to open notification reply."
+            } else {
+                "Toggle Wireless Debugging ON and tap 'Pair device with pairing code'."
+            },
+            icon = Icons.Default.WifiTethering,
+            isCompleted = hasSecureSettingsPermission,
+            actionLabel = if (discoveredPairingPort != null && discoveredPairingPort > 0) "Show Reply Notification" else "Open Wireless Debugging",
+            onAction = {
+                if (discoveredPairingPort != null && discoveredPairingPort > 0) {
+                    onTriggerPairingNotification(discoveredPairingPort, discoveredConnectPort ?: 0)
                 } else {
-                    "Toggle Wireless Debugging ON and tap 'Pair device with pairing code'."
-                },
-                icon = Icons.Default.WifiTethering,
-                isCompleted = hasSecureSettingsPermission,
-                actionLabel = if (discoveredPairingPort != null && discoveredPairingPort > 0) "Show Reply Notification" else "Open Wireless Debugging",
-                onAction = {
-                    if (discoveredPairingPort != null && discoveredPairingPort > 0) {
-                        onTriggerPairingNotification(discoveredPairingPort, discoveredConnectPort ?: 0)
-                    } else {
-                        val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-                        context.startActivity(intent)
-                    }
+                    onOpenDeveloperSettings()
                 }
+            }
+        )
+
+        // Step 4: Auto-Reconnect Permission
+        StepCard(
+            stepNumber = "4",
+            title = "Auto-Reconnect Permission",
+            description = "WRITE_SECURE_SETTINGS lets LocalDeX automatically keep Wireless Debugging alive across reboots.",
+            icon = Icons.Default.Security,
+            isCompleted = hasSecureSettingsPermission,
+            actionLabel = "Granted via Loopback",
+            onAction = null
+        )
+
+        // Optional: One UI Desktop Enhancements
+        if (hasSecureSettingsPermission) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "One UI Desktop Enhancements",
+                style = MaterialTheme.typography.titleMedium
             )
 
-            // Step 4: Auto-Reconnect Permission
-            StepCard(
-                stepNumber = "4",
-                title = "Auto-Reconnect Permission",
-                description = "WRITE_SECURE_SETTINGS lets LocalDeX automatically keep Wireless Debugging alive across reboots.",
-                icon = Icons.Default.Security,
-                isCompleted = hasSecureSettingsPermission,
-                actionLabel = "Granted via Loopback",
-                onAction = null
-            )
-
-            // Optional: One UI Desktop Enhancements
-            if (hasSecureSettingsPermission) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "One UI Desktop Enhancements",
-                    style = MaterialTheme.typography.titleMedium
+            if (onToggleFreeform != null) {
+                DesktopFlagToggleCard(
+                    title = "Movable Freeform Windows",
+                    description = "Enables edge-resizable floating windows in One UI / DeX mode.",
+                    isEnabled = isFreeformEnabled,
+                    onToggle = onToggleFreeform
                 )
+            }
 
-                if (onToggleFreeform != null) {
-                    DesktopFlagToggleCard(
-                        title = "Movable Freeform Windows",
-                        description = "Enables edge-resizable floating windows in One UI / DeX mode.",
-                        isEnabled = isFreeformEnabled,
-                        onToggle = onToggleFreeform
-                    )
-                }
+            if (onToggleForceResizable != null) {
+                DesktopFlagToggleCard(
+                    title = "Force Resizable Activities",
+                    description = "Allows non-resizable apps to scale smoothly inside DeX windows.",
+                    isEnabled = isForceResizableEnabled,
+                    onToggle = onToggleForceResizable
+                )
+            }
 
-                if (onToggleForceResizable != null) {
-                    DesktopFlagToggleCard(
-                        title = "Force Resizable Activities",
-                        description = "Allows non-resizable apps to scale smoothly inside DeX windows.",
-                        isEnabled = isForceResizableEnabled,
-                        onToggle = onToggleForceResizable
-                    )
-                }
-
-                if (onToggleDesktopMode != null) {
-                    DesktopFlagToggleCard(
-                        title = "Force Desktop Windowing",
-                        description = "Forces desktop mode on secondary virtual displays across all apps.",
-                        isEnabled = isDesktopModeEnabled,
-                        onToggle = onToggleDesktopMode
-                    )
-                }
+            if (onToggleDesktopMode != null) {
+                DesktopFlagToggleCard(
+                    title = "Force Desktop Windowing",
+                    description = "Forces desktop mode on secondary virtual displays across all apps.",
+                    isEnabled = isDesktopModeEnabled,
+                    onToggle = onToggleDesktopMode
+                )
             }
         }
     }
