@@ -17,6 +17,7 @@ import androidx.activity.addCallback
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -31,6 +32,9 @@ import org.localdex.core.scrcpy.input.InputMode
 import org.localdex.core.scrcpy.server.ScrcpyServerManager
 import org.localdex.service.DexSessionService
 import org.localdex.service.SessionState
+import org.localdex.ui.foldable.DevicePosture
+import org.localdex.ui.foldable.FoldablePostureTracker
+import org.localdex.ui.foldable.FoldableState
 import org.localdex.ui.theme.LocalDeXTheme
 
 class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
@@ -41,6 +45,8 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var inputEngine: InputEngine? = null
 
     private val inputModeState = MutableStateFlow(InputMode.TRACKPAD)
+    private val isPointerCapturedState = MutableStateFlow(false)
+    private val imeHeightState = MutableStateFlow(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,13 +83,24 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             )
             setContent {
                 val mode by inputModeState.collectAsState()
+                val isCaptured by isPointerCapturedState.collectAsState()
+                val imeHeight by imeHeightState.collectAsState()
                 LocalDeXTheme {
                     SessionPillToolbar(
                         inputMode = mode,
+                        isPointerCaptured = isCaptured,
+                        imeBottomInset = imeHeight,
                         onToggleInputMode = {
                             val nextMode = if (mode == InputMode.TRACKPAD) InputMode.DIRECT_TOUCH else InputMode.TRACKPAD
                             inputModeState.value = nextMode
                             inputEngine?.inputMode = nextMode
+                        },
+                        onTogglePointerCapture = {
+                            if (surfaceView.hasPointerCapture()) {
+                                surfaceView.releasePointerCapture()
+                            } else {
+                                surfaceView.requestPointerCapture()
+                            }
                         },
                         onTriggerKeyboard = {
                             toggleSoftKeyboard()
@@ -97,16 +114,72 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         rootLayout.addView(composeOverlay)
 
-        setContentView(rootLayout)
-
-        // 3. System Back Navigation Forwarding: route Back key into DeX rather than closing activity
-        onBackPressedDispatcher.addCallback(this) {
-            inputEngine?.sendBackGesture()
+        // Apply window insets listener to track soft keyboard height
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
+            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            imeHeightState.value = imeBottom
+            insets
         }
 
-        // 4. Touch Dispatch Interceptor
+        setContentView(rootLayout)
+
+        // 3. System Back Navigation Forwarding: route Back key into DeX or release pointer lock
+        onBackPressedDispatcher.addCallback(this) {
+            if (surfaceView.hasPointerCapture()) {
+                surfaceView.releasePointerCapture()
+            } else {
+                inputEngine?.sendBackGesture()
+            }
+        }
+
+        // 4. Touch & Generic Motion Dispatch Interceptor (Supports S-Pen stylus, mouse, and gestures)
         surfaceView.setOnTouchListener { _, event ->
-            inputEngine?.onTouchEvent(event, surfaceView.width, surfaceView.height) ?: false
+            inputEngine?.onTouchEvent(
+                event = event,
+                viewWidth = surfaceView.width,
+                viewHeight = surfaceView.height,
+                isPointerCaptured = surfaceView.hasPointerCapture()
+            ) ?: false
+        }
+
+        surfaceView.setOnGenericMotionListener { _, event ->
+            inputEngine?.onGenericMotionEvent(
+                event = event,
+                viewWidth = surfaceView.width,
+                viewHeight = surfaceView.height,
+                isPointerCaptured = surfaceView.hasPointerCapture()
+            ) ?: false
+        }
+
+        surfaceView.setOnCapturedPointerListener { _, event ->
+            inputEngine?.handleHardwareMouseEvent(
+                event = event,
+                viewWidth = surfaceView.width,
+                viewHeight = surfaceView.height,
+                isPointerCaptured = true
+            ) ?: false
+        }
+
+        // 5. Foldable Hinge & Posture Awareness: adjust layout for tabletop flex mode
+        val postureTracker = FoldablePostureTracker(this)
+        lifecycleScope.launch {
+            postureTracker.postureFlow.collect { foldableState ->
+                adjustLayoutForPosture(foldableState)
+            }
+        }
+    }
+
+    private fun adjustLayoutForPosture(state: FoldableState) {
+        val hinge = state.hingeBounds
+        val lp = surfaceView.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (state.posture == DevicePosture.TABLETOP && hinge != null && hinge.top > 0) {
+            lp.height = hinge.top
+            lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+            surfaceView.layoutParams = lp
+        } else {
+            lp.height = FrameLayout.LayoutParams.MATCH_PARENT
+            lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+            surfaceView.layoutParams = lp
         }
     }
 
@@ -166,8 +239,14 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun toggleSoftKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        val isImeVisible = ViewCompat.getRootWindowInsets(window.decorView)
+            ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        if (isImeVisible) {
+            windowInsetsController.hide(WindowInsetsCompat.Type.ime())
+        } else {
+            windowInsetsController.show(WindowInsetsCompat.Type.ime())
+        }
     }
 
     private fun stopSessionAndExit() {
@@ -176,6 +255,11 @@ class DexViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         startService(stopIntent)
         finish()
+    }
+
+    override fun onPointerCaptureChanged(hasCapture: Boolean) {
+        super.onPointerCaptureChanged(hasCapture)
+        isPointerCapturedState.value = hasCapture
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

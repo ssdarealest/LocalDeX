@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,6 +51,10 @@ fun SetupWizardSheet(
     hasSecureSettingsPermission: Boolean,
     discoveredPairingPort: Int?,
     discoveredConnectPort: Int?,
+    isFreeformEnabled: Boolean = false,
+    isDesktopModeEnabled: Boolean = false,
+    onToggleFreeform: ((Boolean) -> Unit)? = null,
+    onToggleDesktopMode: ((Boolean) -> Unit)? = null,
     onRequestNotificationPermission: () -> Unit,
     onTriggerPairingNotification: (pairingPort: Int, connectPort: Int) -> Unit,
     onDismiss: () -> Unit
@@ -136,6 +141,74 @@ fun SetupWizardSheet(
                 isCompleted = hasSecureSettingsPermission,
                 actionLabel = "Granted via Loopback",
                 onAction = null
+            )
+
+            // Optional: One UI Desktop Enhancements
+            if (hasSecureSettingsPermission) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "One UI Desktop Enhancements",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                if (onToggleFreeform != null) {
+                    DesktopFlagToggleCard(
+                        title = "Movable Freeform Windows",
+                        description = "Enables edge-resizable floating windows and force-resizable activities in DeX mode.",
+                        isEnabled = isFreeformEnabled,
+                        onToggle = onToggleFreeform
+                    )
+                }
+
+                if (onToggleDesktopMode != null) {
+                    DesktopFlagToggleCard(
+                        title = "Force Desktop Windowing",
+                        description = "Forces desktop mode on secondary virtual displays across all apps.",
+                        isEnabled = isDesktopModeEnabled,
+                        onToggle = onToggleDesktopMode
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DesktopFlagToggleCard(
+    title: String,
+    description: String,
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = onToggle
             )
         }
     }

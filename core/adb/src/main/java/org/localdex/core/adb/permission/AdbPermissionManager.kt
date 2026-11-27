@@ -16,6 +16,9 @@ object AdbPermissionManager {
 
     private const val TAG = "AdbPermissionManager"
     private const val SETTING_ADB_WIFI_ENABLED = "adb_wifi_enabled"
+    const val SETTING_ENABLE_FREEFORM_SUPPORT = "enable_freeform_support"
+    const val SETTING_FORCE_RESIZABLE_ACTIVITIES = "force_resizable_activities"
+    const val SETTING_FORCE_DESKTOP_MODE_ON_EXTERNAL = "force_desktop_mode_on_external_displays"
 
     /**
      * Checks if the app currently holds android.permission.WRITE_SECURE_SETTINGS.
@@ -103,12 +106,108 @@ object AdbPermissionManager {
     }
 
     /**
+     * Checks if One UI freeform window support is enabled.
+     */
+    fun isFreeformSupportEnabled(context: Context): Boolean {
+        return try {
+            Settings.Global.getInt(context.contentResolver, SETTING_ENABLE_FREEFORM_SUPPORT, 0) == 1
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Checks if forcing resizable activities is enabled in developer settings.
+     */
+    fun isForceResizableActivitiesEnabled(context: Context): Boolean {
+        return try {
+            Settings.Global.getInt(context.contentResolver, SETTING_FORCE_RESIZABLE_ACTIVITIES, 0) == 1
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Checks if forcing desktop mode on external displays is enabled.
+     */
+    fun isForceDesktopModeOnExternalDisplaysEnabled(context: Context): Boolean {
+        return try {
+            Settings.Global.getInt(context.contentResolver, SETTING_FORCE_DESKTOP_MODE_ON_EXTERNAL, 0) == 1
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Enables or disables One UI freeform window support.
+     */
+    suspend fun setFreeformSupport(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean {
+        val intVal = if (enabled) 1 else 0
+        var success = false
+        if (hasSecureSettingsPermission(context)) {
+            try {
+                success = Settings.Global.putInt(context.contentResolver, SETTING_ENABLE_FREEFORM_SUPPORT, intVal)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update freeform setting via content resolver", e)
+            }
+        }
+        if (connection != null) {
+            try {
+                connection.executeShell("settings put global $SETTING_ENABLE_FREEFORM_SUPPORT $intVal")
+                success = true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update freeform setting via ADB", e)
+            }
+        }
+        return success
+    }
+
+    /**
+     * Enables or disables force resizable activities.
+     */
+    suspend fun setForceResizableActivities(context: Context, connection: AdbConnection?, enabled: Boolean): Boolean {
+        val intVal = if (enabled) 1 else 0
+        var success = false
+        if (hasSecureSettingsPermission(context)) {
+            try {
+                success = Settings.Global.putInt(context.contentResolver, SETTING_FORCE_RESIZABLE_ACTIVITIES, intVal)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update resizable setting via content resolver", e)
+            }
+        }
+        if (connection != null) {
+            try {
+                connection.executeShell("settings put global $SETTING_FORCE_RESIZABLE_ACTIVITIES $intVal")
+                success = true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update resizable setting via ADB", e)
+            }
+        }
+        return success
+    }
+
+    /**
+     * Sets desktop mode debug system property and global flag.
+     */
+    suspend fun setDesktopModeDebug(connection: AdbConnection, enabled: Boolean): Boolean {
+        val intVal = if (enabled) 1 else 0
+        return try {
+            connection.executeShell("setprop persist.wm.debug.desktop_mode $intVal")
+            connection.executeShell("settings put global $SETTING_FORCE_DESKTOP_MODE_ON_EXTERNAL $intVal")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set desktop mode debug flags", e)
+            false
+        }
+    }
+
+    /**
      * Optional One UI 8.5+ enhancement: enables freeform window support and forces resizable activities.
      */
     suspend fun enableFreeformWindows(connection: AdbConnection): Boolean {
         return try {
-            connection.executeShell("settings put global enable_freeform_support 1")
-            connection.executeShell("settings put global force_resizable_activities 1")
+            connection.executeShell("settings put global $SETTING_ENABLE_FREEFORM_SUPPORT 1")
+            connection.executeShell("settings put global $SETTING_FORCE_RESIZABLE_ACTIVITIES 1")
             Log.i(TAG, "One UI freeform window support enabled")
             true
         } catch (e: Exception) {
