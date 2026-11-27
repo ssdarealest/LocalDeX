@@ -3,6 +3,7 @@ package org.localdex.core.scrcpy.server
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +34,37 @@ class ScrcpyServerManager(
         const val SCRCPY_VERSION = "3.1"
         const val DEFAULT_SCRCPY_PORT = 27183
         const val EXPECTED_SERVER_SHA256 = "958f0944a62f23b1f33a16e9eb14844c1a04b882ca175a738c16d23cb22b86c0"
+
+        /**
+         * Builds the shell invocation string for starting scrcpy-server via app_process.
+         */
+        fun buildServerCommand(profile: DisplayProfile): String {
+            val bitRateBps = profile.bitRateMbps * 1000 * 1000
+            val displayArg = profile.toNewDisplayArg()
+
+            return buildString {
+                append("CLASSPATH=$SERVER_REMOTE_PATH app_process / com.genymobile.scrcpy.Server ")
+                append("$SCRCPY_VERSION ")
+                append("scid=0 ")
+                append("log_level=info ")
+                append("tunnel_forward=false ")
+                append("port=$DEFAULT_SCRCPY_PORT ")
+                append("new_display=$displayArg ")
+                append("video_codec=${profile.codec.scrcpyName} ")
+                append("video_bit_rate=$bitRateBps ")
+                append("max_fps=${profile.maxFps} ")
+                if (profile.audioEnabled) {
+                    append("audio=true ")
+                    append("audio_codec=${profile.audioCodec.scrcpyName} ")
+                } else {
+                    append("audio=false ")
+                }
+                append("control=true ")
+                append("stay_awake=true ")
+                append("power_off_on_close=false ")
+                append("cleanup=true")
+            }
+        }
     }
 
     private var serverStream: AdbStream? = null
@@ -88,27 +120,7 @@ class ScrcpyServerManager(
      * Spawns scrcpy-server on device using app_process with virtual display creation.
      */
     suspend fun startServer(profile: DisplayProfile): ScrcpySessionInfo = withContext(Dispatchers.IO) {
-        val bitRateBps = profile.bitRateMbps * 1000 * 1000
-        val displayArg = profile.toNewDisplayArg()
-
-        // Build scrcpy-server command with --new-display and loopback socket setup
-        val command = buildString {
-            append("CLASSPATH=$SERVER_REMOTE_PATH app_process / com.genymobile.scrcpy.Server ")
-            append("$SCRCPY_VERSION ")
-            append("scid=0 ")
-            append("log_level=info ")
-            append("tunnel_forward=false ")
-            append("port=$DEFAULT_SCRCPY_PORT ")
-            append("new_display=$displayArg ")
-            append("video_codec=${profile.codec.scrcpyName} ")
-            append("video_bit_rate=$bitRateBps ")
-            append("max_fps=${profile.maxFps} ")
-            append("audio=false ")
-            append("control=true ")
-            append("stay_awake=true ")
-            append("power_off_on_close=false ")
-            append("cleanup=true")
-        }
+        val command = buildServerCommand(profile)
 
         Log.i(TAG, "Launching scrcpy-server: $command")
         val stream = connection.openStream("shell:$command")

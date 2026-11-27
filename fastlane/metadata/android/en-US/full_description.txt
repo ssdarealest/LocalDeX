@@ -1,0 +1,13 @@
+LocalDeX is a Free and Open Source Software (FOSS) application that enables Samsung DeX to run natively on your Galaxy phone or tablet's own screen—with no external monitor, no dock, no USB cable, no PC, and no root access.
+
+HOW IT WORKS:
+1. Loopback ADB over TLS (127.0.0.1): LocalDeX pairs and connects directly to Android 11+ Wireless Debugging on localhost. No data ever leaves your device.
+2. Self-Healing Permission Grant: Grants android.permission.WRITE_SECURE_SETTINGS via loopback ADB to automatically maintain Wireless Debugging across reboots and Wi-Fi network switches.
+3. Native Virtual Display: Spawns the bundled scrcpy-server binary on localhost with --new-display. Samsung One UI detects this virtual screen and launches Samsung DeX directly on it.
+4. Hardware Accelerated Rendering: Decodes H.264/H.265 using low-latency MediaCodec rendering directly to a SurfaceView with full touch gestures, virtual trackpad, and hardware keyboard/mouse pass-through.
+5. Foldable Awareness: Dynamic tabletop and cover/inner screen adaptation for Galaxy Z Fold devices.
+
+PRIVACY & FOSS GUARANTEE:
+- 100% Free and Open Source under GPL-3.0.
+- Zero proprietary Google Play Services (GMS) or Firebase dependencies.
+- Zero analytics, trackers, telemetry, or remote internet connections.

@@ -9,11 +9,19 @@ data class DisplayProfile(
     val maxFps: Int = 60,
     val bitRateMbps: Int = 16,
     val codec: VideoCodec = VideoCodec.H264,
+    val audioEnabled: Boolean = false,
+    val audioCodec: AudioCodec = AudioCodec.OPUS,
     val isCustom: Boolean = false
 ) {
     enum class VideoCodec(val scrcpyName: String, val mimeType: String) {
         H264("h264", "video/avc"),
         H265("h265", "video/hevc")
+    }
+
+    enum class AudioCodec(val scrcpyName: String, val mimeType: String) {
+        OPUS("opus", "audio/opus"),
+        AAC("aac", "audio/mp4a-latm"),
+        RAW("raw", "audio/raw")
     }
 
     /**
@@ -45,6 +53,26 @@ data class DisplayProfile(
             dpi = 360,
             maxFps = 60,
             bitRateMbps = 20
+        )
+
+        val PRESET_FOLD_INNER = DisplayProfile(
+            id = "fold_inner",
+            name = "Galaxy Z Fold (Inner Unfolded)",
+            width = 2176,
+            height = 1812,
+            dpi = 360,
+            maxFps = 60,
+            bitRateMbps = 24
+        )
+
+        val PRESET_FOLD_COVER = DisplayProfile(
+            id = "fold_cover",
+            name = "Galaxy Z Fold (Cover Screen)",
+            width = 2316,
+            height = 904,
+            dpi = 380,
+            maxFps = 60,
+            bitRateMbps = 18
         )
 
         val PRESET_1080P = DisplayProfile(
@@ -80,6 +108,8 @@ data class DisplayProfile(
         val DEFAULT_PRESETS = listOf(
             PRESET_1080P,
             PRESET_NATIVE,
+            PRESET_FOLD_INNER,
+            PRESET_FOLD_COVER,
             PRESET_4_3,
             PRESET_ULTRAWIDE
         )
