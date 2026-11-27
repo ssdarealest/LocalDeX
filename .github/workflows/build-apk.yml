@@ -12,7 +12,7 @@ jobs:
   build:
     name: Build & Test APK
     runs-on: ubuntu-latest
-    if: "${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'release: v') || contains(github.event.head_commit.message, 'Release: v') }}"
+    if: "${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-apk]') || contains(github.event.head_commit.message, 'release: v') || contains(github.event.head_commit.message, 'Release: v') }}"
 
     steps:
       - name: Checkout Repository
@@ -58,6 +58,7 @@ jobs:
 
       - name: Extract Release Tag
         id: extract_tag
+        if: "${{ contains(github.event.head_commit.message, 'release: v') || contains(github.event.head_commit.message, 'Release: v') }}"
         run: |
           TAG=$(echo "${{ github.event.head_commit.message }}" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?' | head -n1)
           if [ -z "$TAG" ]; then
@@ -66,7 +67,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: steps.extract_tag.outputs.tag != ''
+        if: "${{ (contains(github.event.head_commit.message, 'release: v') || contains(github.event.head_commit.message, 'Release: v')) && steps.extract_tag.outputs.tag != '' }}"
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.extract_tag.outputs.tag }}
